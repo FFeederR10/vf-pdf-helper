@@ -1,0 +1,5 @@
+PyMuPDF==1.28.0
+PySide6==6.11.1
+PyInstaller==6.21.0
+Pillow==11.3.0
+pytest==9.1.1

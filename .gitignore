@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+
+# Build and generated output
+build/
+dist/
+output/
+tmp/
+*.spec
+
+# User documents must never be committed accidentally
+*.pdf
+
+# Editors and operating system
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+
