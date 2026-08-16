@@ -74,7 +74,6 @@ APP_STYLE = """
 QMainWindow, QWidget {
     background: #f5f7fb;
     color: #172033;
-    font-family: "Microsoft YaHei UI", "Segoe UI";
     font-size: 13px;
 }
 QToolBar {
@@ -453,17 +452,17 @@ class FloatingTextToolbar(QFrame):
             self.size_combo.addItem(str(size))
         self.size_combo.lineEdit().setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.color_button = QPushButton()
-        self.color_button.setToolTip("文字颜色")
+        self.color_button.setToolTip("Text color")
         self.bold_button = QPushButton("B")
-        self.bold_button.setToolTip("加粗")
+        self.bold_button.setToolTip("Bold")
         self.bold_button.setCheckable(True)
         self.bold_button.setStyleSheet("font-weight:700;")
         self.italic_button = QPushButton("I")
-        self.italic_button.setToolTip("斜体")
+        self.italic_button.setToolTip("Italic")
         self.italic_button.setCheckable(True)
         self.italic_button.setStyleSheet("font-style:italic;")
         self.underline_button = QPushButton("U")
-        self.underline_button.setToolTip("下划线")
+        self.underline_button.setToolTip("Underline")
         self.underline_button.setCheckable(True)
         self.underline_button.setStyleSheet("text-decoration:underline;")
         layout.addWidget(self.font_combo)
@@ -546,7 +545,7 @@ class FloatingTextToolbar(QFrame):
     def _choose_color(self) -> None:
         self.interaction_started.emit()
         initial = QColor.fromRgbF(*self._color)
-        color = QColorDialog.getColor(initial, self, "选择文字颜色")
+        color = QColorDialog.getColor(initial, self, "Choose text color")
         if color.isValid():
             self._color = (color.redF(), color.greenF(), color.blueF())
             font, size, _, bold, italic, underline = self.current_style()
@@ -572,16 +571,16 @@ class FloatingInkToolbar(QFrame):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(7, 5, 7, 5)
         layout.setSpacing(5)
-        label = QLabel("画笔")
+        label = QLabel("Pen")
         label.setStyleSheet("font-weight:700;")
         self.width_combo = QComboBox()
-        self.width_combo.setToolTip("画笔粗细")
+        self.width_combo.setToolTip("Pen width")
         self.width_combo.setFixedWidth(72)
         for width in (1, 1.5, 2, 3, 5, 8):
             self.width_combo.addItem(f"{width:g} pt", float(width))
         self.width_combo.setCurrentIndex(2)
-        self.color_button = QPushButton("颜色")
-        self.color_button.setToolTip("签名颜色")
+        self.color_button = QPushButton("Color")
+        self.color_button.setToolTip("Signature color")
         self.color_button.clicked.connect(self._choose_color)
         layout.addWidget(label)
         layout.addWidget(self.width_combo)
@@ -594,7 +593,7 @@ class FloatingInkToolbar(QFrame):
 
     def _choose_color(self) -> None:
         initial = QColor.fromRgbF(*self._color)
-        color = QColorDialog.getColor(initial, self, "选择签名颜色")
+        color = QColorDialog.getColor(initial, self, "Choose signature color")
         if color.isValid():
             self._color = (color.redF(), color.greenF(), color.blueF())
             self._update_color_button()
@@ -868,7 +867,7 @@ class DirectPageCanvas(QLabel):
                     multiline = FormTextEdit(self)
                     multiline.setPlainText(field.value)
                     multiline.setPlaceholderText(field.label)
-                    multiline.setToolTip(field.label + "（多行字段）")
+                    multiline.setToolTip(field.label + " (multiline field)")
                     multiline.setStyleSheet(
                         "QPlainTextEdit {background:#ffffff;"
                         "border:1px solid #4f91ed;border-radius:2px;padding:2px 4px;}"
@@ -956,9 +955,9 @@ class DirectPageCanvas(QLabel):
                 )
                 control = combo
             elif field.field_type == pymupdf.PDF_WIDGET_TYPE_SIGNATURE:
-                signature_label = QLabel("数字签名字段", self)
+                signature_label = QLabel("Digital signature field", self)
                 signature_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                signature_label.setToolTip("可使用工具栏中的“签名画笔”绘制手写签名")
+                signature_label.setToolTip("Use the Signature Pen toolbar tool to draw a handwritten signature.")
                 signature_label.setStyleSheet(
                     "background:rgba(232,240,255,225);border:1px dashed #4f91ed;"
                     "border-radius:2px;color:#0b57c9;font-size:11px;"
@@ -1186,7 +1185,7 @@ class DirectPageCanvas(QLabel):
         self._editor_point = point
         self._create_editor("", left, top, 130, max(31, round(size * self._scale) + 12))
         assert self._inline_editor is not None
-        self._inline_editor.setPlaceholderText("输入文字")
+        self._inline_editor.setPlaceholderText("Enter text")
 
     def _create_editor(self, text: str, left: int, top: int, width: int, height: int) -> None:
         editor = QLineEdit(self)
@@ -1463,7 +1462,7 @@ class ThumbnailList(QListWidget):
         placeholder = QPixmap(118, 148)
         placeholder.fill(QColor("#edf0f4"))
         for index in range(model.page_count):
-            item = QListWidgetItem(QIcon(placeholder), f"  第 {index + 1} 页")
+            item = QListWidgetItem(QIcon(placeholder), f"  Page {index + 1}")
             item.setData(self.PAGE_ROLE, index)
             item.setTextAlignment(Qt.AlignmentFlag.AlignHCenter)
             item.setSizeHint(QSize(150, 184))
@@ -1494,10 +1493,10 @@ class ThumbnailList(QListWidget):
 class InsertPdfDialog(QDialog):
     def __init__(self, file_name: str, source_pages: int, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("插入 PDF")
+        self.setWindowTitle("Insert PDF")
         self.setMinimumWidth(420)
         root = QVBoxLayout(self)
-        title = QLabel("选择要插入的页面")
+        title = QLabel("Choose pages to insert")
         title.setObjectName("PanelTitle")
         root.addWidget(title)
         name = QLabel(Path(file_name).name)
@@ -1514,26 +1513,26 @@ class InsertPdfDialog(QDialog):
         self.to_page.setRange(1, source_pages)
         self.to_page.setValue(source_pages)
         self.position = QComboBox()
-        self.position.addItem("当前页之后", "after")
-        self.position.addItem("当前页之前", "before")
-        self.position.addItem("文档末尾", "end")
-        form.addRow("起始页", self.from_page)
-        form.addRow("结束页", self.to_page)
-        form.addRow("插入位置", self.position)
+        self.position.addItem("After current page", "after")
+        self.position.addItem("Before current page", "before")
+        self.position.addItem("End of document", "end")
+        form.addRow("First page", self.from_page)
+        form.addRow("Last page", self.to_page)
+        form.addRow("Insert position", self.position)
         root.addLayout(form)
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Cancel | QDialogButtonBox.StandardButton.Ok
         )
-        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("插入")
-        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("取消")
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Insert")
+        buttons.button(QDialogButtonBox.StandardButton.Cancel).setText("Cancel")
         buttons.accepted.connect(self._accept_if_valid)
         buttons.rejected.connect(self.reject)
         root.addWidget(buttons)
 
     def _accept_if_valid(self) -> None:
         if self.from_page.value() > self.to_page.value():
-            QMessageBox.warning(self, "页码范围", "起始页不能大于结束页。")
+            QMessageBox.warning(self, "Page range", "The first page cannot be greater than the last page.")
             return
         self.accept()
 
@@ -1554,22 +1553,22 @@ class TextInspector(QWidget):
         root.setSpacing(10)
 
         heading_row = QHBoxLayout()
-        heading = QLabel("文字编辑")
+        heading = QLabel("Text editing")
         heading.setObjectName("PanelTitle")
-        self.layer_badge = QLabel("未打开")
+        self.layer_badge = QLabel("Not open")
         self.layer_badge.setObjectName("Badge")
         heading_row.addWidget(heading)
         heading_row.addStretch(1)
         heading_row.addWidget(self.layer_badge)
         root.addLayout(heading_row)
 
-        self.selection_label = QLabel("切换到“选择文字”后，可拖动文字或双击直接修改。")
+        self.selection_label = QLabel("Switch to Select Text to drag text or double-click it for inline editing.")
         self.selection_label.setObjectName("Muted")
         self.selection_label.setWordWrap(True)
         root.addWidget(self.selection_label)
 
         self.editor = QPlainTextEdit()
-        self.editor.setPlaceholderText("可选：在这里输入长文本，或要新增的文字…")
+        self.editor.setPlaceholderText("Optional: enter longer replacement text or new text here...")
         self.editor.setMinimumHeight(130)
         root.addWidget(self.editor)
 
@@ -1584,20 +1583,20 @@ class TextInspector(QWidget):
         self.font_size.setValue(11)
         self.font_size.setSuffix(" pt")
         self.color_button = QPushButton("  ")
-        self.color_button.setToolTip("选择文字颜色")
+        self.color_button.setToolTip("Choose text color")
         self.color_button.setFixedHeight(31)
         self.color_button.clicked.connect(self.choose_color_requested)
-        form.addRow("字体", self.font_combo)
-        form.addRow("字号", self.font_size)
-        form.addRow("颜色", self.color_button)
+        form.addRow("Font", self.font_combo)
+        form.addRow("Size", self.font_size)
+        form.addRow("Color", self.color_button)
         root.addLayout(form)
 
-        self.replace_button = QPushButton("应用修改")
+        self.replace_button = QPushButton("Apply changes")
         self.replace_button.setObjectName("Primary")
         self.replace_button.clicked.connect(self.replace_requested)
-        self.delete_button = QPushButton("删除选中文字")
+        self.delete_button = QPushButton("Delete selected text")
         self.delete_button.clicked.connect(self.delete_requested)
-        self.add_button = QPushButton("添加到页面")
+        self.add_button = QPushButton("Add to page")
         self.add_button.setObjectName("Primary")
         self.add_button.clicked.connect(self.add_requested)
         root.addWidget(self.replace_button)
@@ -1605,7 +1604,7 @@ class TextInspector(QWidget):
         root.addWidget(self.add_button)
 
         tip = QLabel(
-            "提示：文字替换会移除选中区域的原文字形，再写入新文字；不会栅格化整页。"
+            "Tip: replacing text removes the original glyphs in the selected area and writes new text without rasterizing the page."
         )
         tip.setObjectName("Muted")
         tip.setWordWrap(True)
@@ -1663,7 +1662,7 @@ class MainWindow(QMainWindow):
         sidebar_layout.setContentsMargins(10, 14, 10, 10)
         sidebar_layout.setSpacing(8)
         header = QHBoxLayout()
-        label = QLabel("页面")
+        label = QLabel("Pages")
         label.setObjectName("PanelTitle")
         self.page_badge = QLabel("0")
         self.page_badge.setObjectName("Badge")
@@ -1672,9 +1671,10 @@ class MainWindow(QMainWindow):
         header.addWidget(self.page_badge)
         sidebar_layout.addLayout(header)
         sidebar_layout.addWidget(self.page_list, 1)
-        hint = QLabel("拖拽缩略图可调整顺序\n按住 Ctrl/Shift 可多选")
+        hint = QLabel("Drag to reorder pages\nCtrl/Shift: multi-select")
         hint.setObjectName("Muted")
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        hint.setWordWrap(True)
         sidebar_layout.addWidget(hint)
 
         self.viewer = DirectPdfViewer(self.fonts)
@@ -1698,13 +1698,13 @@ class MainWindow(QMainWindow):
             "background:#1467d9;color:white;border-radius:18px;"
             "font-size:25px;font-weight:800;"
         )
-        empty_title = QLabel("打开 PDF，开始浏览与编辑")
+        empty_title = QLabel("Open a PDF to start viewing and editing")
         empty_title.setStyleSheet("font-size:20px;font-weight:700;color:#172033;")
         empty_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        empty_tip = QLabel("可直接拖入 PDF 文件，或点击下方按钮")
+        empty_tip = QLabel("Drop a PDF here or use the button below")
         empty_tip.setObjectName("Muted")
         empty_tip.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        open_button = QPushButton("打开 PDF")
+        open_button = QPushButton("Open PDF")
         open_button.setObjectName("Primary")
         open_button.setFixedWidth(150)
         open_button.clicked.connect(self.open_dialog)
@@ -1733,7 +1733,7 @@ class MainWindow(QMainWindow):
 
         status = QStatusBar()
         self.setStatusBar(status)
-        self.file_status = QLabel("未打开文件")
+        self.file_status = QLabel("No file open")
         self.text_status = QLabel("")
         self.page_status = QLabel("")
         self.zoom_status = QLabel("")
@@ -1760,40 +1760,65 @@ class MainWindow(QMainWindow):
         return action
 
     def _build_actions(self) -> None:
-        self.open_action = self._make_action("打开", self.open_dialog, QKeySequence.StandardKey.Open)
+        self.open_action = self._make_action("Open", self.open_dialog, QKeySequence.StandardKey.Open)
         self.export_action = self._make_action(
-            "导出 PDF", self.export_dialog, QKeySequence.StandardKey.SaveAs
+            "Export",
+            self.export_dialog,
+            QKeySequence.StandardKey.SaveAs,
+            tooltip="Export as PDF",
         )
-        self.insert_action = self._make_action("插入 PDF", self._insert_pdf, "Ctrl+I")
+        self.insert_action = self._make_action(
+            "Insert", self._insert_pdf, "Ctrl+I", tooltip="Insert pages from another PDF"
+        )
         self.delete_page_action = self._make_action(
-            "删除页面", self._delete_pages, "Ctrl+Delete"
+            "Delete", self._delete_pages, "Ctrl+Delete", tooltip="Delete selected pages"
         )
-        self.rotate_left_action = self._make_action("左转", lambda: self._rotate_pages(-90))
-        self.rotate_right_action = self._make_action("右转", lambda: self._rotate_pages(90))
-        self.undo_action = self._make_action("撤销", self._undo, QKeySequence.StandardKey.Undo)
-        self.redo_action = self._make_action("重做", self._redo, QKeySequence.StandardKey.Redo)
-        self.prev_action = self._make_action("上一页", self._previous_page, "PageUp")
-        self.next_action = self._make_action("下一页", self._next_page, "PageDown")
-        self.zoom_out_action = self._make_action("缩小", lambda: self._zoom_step(-1), "Ctrl+-")
-        self.zoom_in_action = self._make_action("放大", lambda: self._zoom_step(1), "Ctrl++")
-        self.fit_action = self._make_action("适合宽度", self._fit_to_width, "Ctrl+0")
+        self.rotate_left_action = self._make_action(
+            "Rotate L", lambda: self._rotate_pages(-90), tooltip="Rotate selected pages left"
+        )
+        self.rotate_right_action = self._make_action(
+            "Rotate R", lambda: self._rotate_pages(90), tooltip="Rotate selected pages right"
+        )
+        self.undo_action = self._make_action("Undo", self._undo, QKeySequence.StandardKey.Undo)
+        self.redo_action = self._make_action("Redo", self._redo, QKeySequence.StandardKey.Redo)
+        self.prev_action = self._make_action(
+            "Previous", self._previous_page, "PageUp", tooltip="Previous page"
+        )
+        self.next_action = self._make_action(
+            "Next", self._next_page, "PageDown", tooltip="Next page"
+        )
+        self.zoom_out_action = self._make_action(
+            "Zoom -", lambda: self._zoom_step(-1), "Ctrl+-", tooltip="Zoom out"
+        )
+        self.zoom_in_action = self._make_action(
+            "Zoom +", lambda: self._zoom_step(1), "Ctrl++", tooltip="Zoom in"
+        )
+        self.fit_action = self._make_action(
+            "Fit", self._fit_to_width, "Ctrl+0", tooltip="Fit page width"
+        )
 
         self.mode_group = QActionGroup(self)
         self.mode_group.setExclusive(True)
         self.browse_mode_action = self._make_action(
-            "浏览", lambda: self._set_mode("browse"), checkable=True
+            "Browse", lambda: self._set_mode("browse"), checkable=True
         )
         self.select_mode_action = self._make_action(
-            "选择文字", lambda: self._set_mode("select"), checkable=True
+            "Select Text", lambda: self._set_mode("select"), checkable=True
         )
         self.add_mode_action = self._make_action(
-            "添加文字", lambda: self._set_mode("add"), checkable=True
+            "Add Text", lambda: self._set_mode("add"), checkable=True
         )
         self.form_mode_action = self._make_action(
-            "填写表单", lambda: self._set_mode("form"), checkable=True
+            "Forms",
+            lambda: self._set_mode("form"),
+            checkable=True,
+            tooltip="Fill PDF form fields",
         )
         self.signature_mode_action = self._make_action(
-            "签名画笔", lambda: self._set_mode("signature"), checkable=True
+            "Sign",
+            lambda: self._set_mode("signature"),
+            checkable=True,
+            tooltip="Draw a signature",
         )
         for action in (
             self.browse_mode_action,
@@ -1806,15 +1831,15 @@ class MainWindow(QMainWindow):
         self.browse_mode_action.setChecked(True)
 
     def _build_menus_and_toolbar(self) -> None:
-        file_menu = self.menuBar().addMenu("文件")
+        file_menu = self.menuBar().addMenu("File")
         file_menu.addAction(self.open_action)
         file_menu.addAction(self.insert_action)
         file_menu.addSeparator()
         file_menu.addAction(self.export_action)
         file_menu.addSeparator()
-        file_menu.addAction("退出", self.close, "Alt+F4")
+        file_menu.addAction("Exit", self.close, "Alt+F4")
 
-        edit_menu = self.menuBar().addMenu("编辑")
+        edit_menu = self.menuBar().addMenu("Edit")
         edit_menu.addAction(self.undo_action)
         edit_menu.addAction(self.redo_action)
         edit_menu.addSeparator()
@@ -1822,7 +1847,7 @@ class MainWindow(QMainWindow):
         edit_menu.addAction(self.rotate_left_action)
         edit_menu.addAction(self.rotate_right_action)
 
-        view_menu = self.menuBar().addMenu("视图")
+        view_menu = self.menuBar().addMenu("View")
         view_menu.addAction(self.browse_mode_action)
         view_menu.addAction(self.select_mode_action)
         view_menu.addAction(self.add_mode_action)
@@ -1833,15 +1858,15 @@ class MainWindow(QMainWindow):
         view_menu.addAction(self.zoom_out_action)
         view_menu.addAction(self.fit_action)
 
-        help_menu = self.menuBar().addMenu("帮助")
-        help_menu.addAction("使用说明", self._show_help)
-        help_menu.addAction("开源许可", self._show_licenses)
-        help_menu.addAction(f"关于 {APP_NAME}", self._show_about)
+        help_menu = self.menuBar().addMenu("Help")
+        help_menu.addAction("User Guide", self._show_help)
+        help_menu.addAction("Open-source Licenses", self._show_licenses)
+        help_menu.addAction(f"About {APP_NAME}", self._show_about)
 
-        toolbar = QToolBar("主工具栏")
+        toolbar = QToolBar("Main toolbar")
         toolbar.setMovable(False)
         toolbar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
-        toolbar.setStyleSheet("QToolButton { padding: 6px 5px; }")
+        toolbar.setStyleSheet("QToolButton { padding: 6px 3px; font-size: 12px; }")
         self.addToolBar(toolbar)
         toolbar.addAction(self.open_action)
         toolbar.addAction(self.export_action)
@@ -1871,7 +1896,7 @@ class MainWindow(QMainWindow):
         self.viewer.hide()
         self.page_list.clear()
         self.page_badge.setText("0")
-        self.file_status.setText("未打开文件")
+        self.file_status.setText("No file open")
         self.text_status.setText("")
         self.page_status.setText("")
         self.zoom_status.setText("")
@@ -1883,40 +1908,40 @@ class MainWindow(QMainWindow):
     def _title(self) -> str:
         if not self.model.is_open:
             return APP_NAME
-        name = Path(self.model.saved_path or self.model.source_path or "未命名.pdf").name
+        name = Path(self.model.saved_path or self.model.source_path or "Untitled.pdf").name
         return f"{'*' if self.model.modified else ''}{name} - {APP_NAME}"
 
     def _set_mode(self, mode: str) -> None:
         self.viewer.canvas.set_mode(mode)
         if mode == "select":
             self.statusBar().showMessage(
-                "单击选择文字；按住拖动可移动；双击编辑；Delete 或 Backspace 删除", 3500
+                "Click text to select it; drag to move; double-click to edit; press Delete or Backspace to remove", 3500
             )
         elif mode == "add":
             self.current_span = None
             self.viewer.canvas.select_span(None)
-            self.statusBar().showMessage("点击页面任意位置，直接输入新增文字", 3500)
+            self.statusBar().showMessage("Click anywhere on the page and type to add text", 3500)
         elif mode == "form":
             self.current_span = None
             count = len(self.model.form_fields(self.current_page)) if self.model.is_open else 0
             self.statusBar().showMessage(
-                f"当前页有 {count} 个表单字段，点击蓝框直接填写"
+                f"{count} fillable form field(s) on this page. Click a blue outline to edit."
                 if count
-                else "当前页没有可填写的表单字段",
+                else "This page has no fillable form fields",
                 3500,
             )
         elif mode == "signature":
             self.current_span = None
             self.statusBar().showMessage(
-                "按住鼠标在页面上绘制签名；右上角可调整颜色和粗细", 3500
+                "Hold the mouse button and draw on the page; adjust color and width in the top-right toolbar", 3500
             )
         else:
-            self.statusBar().showMessage("浏览模式：滚轮翻动，Ctrl + 滚轮缩放", 2500)
+            self.statusBar().showMessage("Browse mode: use the mouse wheel to scroll and Ctrl + wheel to zoom", 2500)
 
     def open_dialog(self) -> None:
         if not self._confirm_discard_changes():
             return
-        path, _ = QFileDialog.getOpenFileName(self, "打开 PDF", "", "PDF 文件 (*.pdf)")
+        path, _ = QFileDialog.getOpenFileName(self, "Open PDF", "", "PDF Files (*.pdf)")
         if path:
             self.open_path(path, already_confirmed=True)
 
@@ -1931,8 +1956,8 @@ class MainWindow(QMainWindow):
             except PasswordRequired:
                 password, ok = QInputDialog.getText(
                     self,
-                    "PDF 密码",
-                    f"{Path(path).name} 需要密码：",
+                    "PDF Password",
+                    f"{Path(path).name} requires a password:",
                     QLineEdit.EchoMode.Password,
                 )
                 if not ok:
@@ -1947,9 +1972,9 @@ class MainWindow(QMainWindow):
         self._rebuild_document()
         form_count = self.model.form_field_count
         self.statusBar().showMessage(
-            f"PDF 已打开，发现 {form_count} 个可填写表单字段"
+            f"PDF opened with {form_count} fillable form field(s)"
             if form_count
-            else "PDF 已打开",
+            else "PDF opened",
             3500 if form_count else 2500,
         )
 
@@ -1957,9 +1982,9 @@ class MainWindow(QMainWindow):
         if not self.model.is_open:
             return False
         source = Path(self.model.saved_path or self.model.source_path or "document.pdf")
-        suggested = source.with_name(f"{source.stem}-已编辑.pdf")
+        suggested = source.with_name(f"{source.stem}-edited.pdf")
         path, _ = QFileDialog.getSaveFileName(
-            self, "导出 PDF", str(suggested), "PDF 文件 (*.pdf)"
+            self, "Export PDF", str(suggested), "PDF Files (*.pdf)"
         )
         if not path:
             return False
@@ -1975,7 +2000,7 @@ class MainWindow(QMainWindow):
             QApplication.restoreOverrideCursor()
         self.setWindowTitle(self._title())
         self.file_status.setText(str(Path(path)))
-        self.statusBar().showMessage("导出完成，文件已重新打开校验", 3500)
+        self.statusBar().showMessage("Export complete. The file was reopened and verified.", 3500)
         self._update_actions()
         return True
 
@@ -1983,13 +2008,13 @@ class MainWindow(QMainWindow):
         if not self.model.is_open or not self.model.modified:
             return True
         box = QMessageBox(self)
-        box.setWindowTitle("尚未导出")
+        box.setWindowTitle("Unsaved Changes")
         box.setIcon(QMessageBox.Icon.Question)
-        box.setText("当前 PDF 有未导出的修改。")
-        box.setInformativeText("是否先导出修改后的 PDF？")
-        save = box.addButton("导出", QMessageBox.ButtonRole.AcceptRole)
-        discard = box.addButton("不保存", QMessageBox.ButtonRole.DestructiveRole)
-        cancel = box.addButton("取消", QMessageBox.ButtonRole.RejectRole)
+        box.setText("The current PDF has changes that have not been exported.")
+        box.setInformativeText("Would you like to export the modified PDF first?")
+        save = box.addButton("Export", QMessageBox.ButtonRole.AcceptRole)
+        discard = box.addButton("Discard", QMessageBox.ButtonRole.DestructiveRole)
+        cancel = box.addButton("Cancel", QMessageBox.ButtonRole.RejectRole)
         box.exec()
         clicked = box.clickedButton()
         if clicked == save:
@@ -2002,21 +2027,21 @@ class MainWindow(QMainWindow):
         try:
             source = pymupdf.open(path)
         except Exception as exc:
-            self._error(f"无法打开要插入的 PDF：{exc}")
+            self._error(f"Could not open the PDF to insert: {exc}")
             return None
         password = ""
         try:
             if source.needs_pass:
                 password, ok = QInputDialog.getText(
                     self,
-                    "PDF 密码",
-                    f"{Path(path).name} 需要密码：",
+                    "PDF Password",
+                    f"{Path(path).name} requires a password:",
                     QLineEdit.EchoMode.Password,
                 )
                 if not ok:
                     return None
                 if not source.authenticate(password):
-                    self._error("密码不正确。")
+                    self._error("The password is incorrect.")
                     return None
             return source.page_count, password
         finally:
@@ -2029,7 +2054,7 @@ class MainWindow(QMainWindow):
         path = preset_path
         if not path:
             path, _ = QFileDialog.getOpenFileName(
-                self, "选择要插入的 PDF", "", "PDF 文件 (*.pdf)"
+                self, "Choose a PDF to Insert", "", "PDF Files (*.pdf)"
             )
         if not path:
             return
@@ -2060,7 +2085,7 @@ class MainWindow(QMainWindow):
             return
         self.current_page = insert_at
         self._rebuild_document()
-        self.statusBar().showMessage(f"已插入 {count} 页", 2500)
+        self.statusBar().showMessage(f"Inserted {count} page(s)", 2500)
 
     def _selected_pages(self) -> list[int]:
         rows = sorted({self.page_list.row(item) for item in self.page_list.selectedItems()})
@@ -2070,14 +2095,14 @@ class MainWindow(QMainWindow):
         pages = self._selected_pages()
         if not pages:
             return
-        label = "、".join(str(index + 1) for index in pages[:6])
+        label = ", ".join(str(index + 1) for index in pages[:6])
         if len(pages) > 6:
             label += "…"
         if (
             QMessageBox.question(
                 self,
-                "删除页面",
-                f"确定删除第 {label} 页吗？",
+                "Delete Pages",
+                f"Delete page(s) {label}?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )
@@ -2110,21 +2135,21 @@ class MainWindow(QMainWindow):
             return
         self.current_page = new_current
         self._rebuild_document()
-        self.statusBar().showMessage("页面顺序已更新", 1800)
+        self.statusBar().showMessage("Page order updated", 1800)
 
     def _undo(self) -> None:
         label = self.model.undo()
         if label:
             self.current_page = min(self.current_page, self.model.page_count - 1)
             self._rebuild_document()
-            self.statusBar().showMessage(f"已撤销：{label}", 1800)
+            self.statusBar().showMessage(f"Undid: {label}", 1800)
 
     def _redo(self) -> None:
         label = self.model.redo()
         if label:
             self.current_page = min(self.current_page, self.model.page_count - 1)
             self._rebuild_document()
-            self.statusBar().showMessage(f"已重做：{label}", 1800)
+            self.statusBar().showMessage(f"Redid: {label}", 1800)
 
     def _previous_page(self) -> None:
         if self.current_page > 0:
@@ -2181,16 +2206,16 @@ class MainWindow(QMainWindow):
             spans = self.model.text_spans(self.current_page)
             form_fields = self.model.form_fields(self.current_page)
         except Exception as exc:
-            self._error(f"页面渲染失败：{exc}")
+            self._error(f"Page rendering failed: {exc}")
             return
         self.viewer.canvas.set_page(
             image, self.zoom, spans, form_fields, self.current_span
         )
-        status_parts = [f"{len(spans)} 个文本块" if spans else "无文本层"]
+        status_parts = [f"{len(spans)} text blocks" if spans else "No text layer"]
         if form_fields:
-            status_parts.append(f"{len(form_fields)} 个表单项")
-        self.text_status.setText(" · ".join(status_parts) + "  ")
-        self.page_status.setText(f"第 {self.current_page + 1} / {self.model.page_count} 页  ")
+            status_parts.append(f"{len(form_fields)} form fields")
+        self.text_status.setText(" | ".join(status_parts) + "  ")
+        self.page_status.setText(f"Page {self.current_page + 1} of {self.model.page_count}  ")
         self.zoom_status.setText(f"{round(self.zoom * 100)}%  ")
         self._update_actions()
 
@@ -2200,7 +2225,7 @@ class MainWindow(QMainWindow):
         if len(preview) > 35:
             preview = preview[:35] + "…"
         self.statusBar().showMessage(
-            f"已选：{preview}　拖动移动，双击编辑，Delete / Backspace 删除", 3000
+            f"Selected: {preview}  Drag to move, double-click to edit, Delete / Backspace to remove", 3000
         )
 
     def _inline_text_committed(
@@ -2230,13 +2255,13 @@ class MainWindow(QMainWindow):
                 underline,
             )
         except Exception as exc:
-            self._error(f"文字修改失败：{exc}")
+            self._error(f"Could not edit text: {exc}")
             return
         self.current_span = None
         self._rebuild_document()
         self.select_mode_action.setChecked(True)
         self._set_mode("select")
-        self.statusBar().showMessage("文字已保存", 1800)
+        self.statusBar().showMessage("Text saved", 1800)
 
     def _delete_selected_text(self, span: TextSpan) -> None:
         try:
@@ -2249,13 +2274,13 @@ class MainWindow(QMainWindow):
                 span.color,
             )
         except Exception as exc:
-            self._error(f"删除文字失败：{exc}")
+            self._error(f"Could not delete text: {exc}")
             return
         self.current_span = None
         self._rebuild_document()
         self.select_mode_action.setChecked(True)
         self._set_mode("select")
-        self.statusBar().showMessage("文字已删除", 1800)
+        self.statusBar().showMessage("Text deleted", 1800)
 
     def _style_selected_text(
         self,
@@ -2280,7 +2305,7 @@ class MainWindow(QMainWindow):
                 underline,
             )
         except Exception as exc:
-            self._error(f"文字样式修改失败：{exc}")
+            self._error(f"Could not update text style: {exc}")
             return
         self._rebuild_document()
         candidates = self.model.text_spans(self.current_page)
@@ -2294,7 +2319,7 @@ class MainWindow(QMainWindow):
             self.viewer.canvas.select_span(
                 new_span, (font, size, color, bold, italic, underline)
             )
-        self.statusBar().showMessage("文字样式已更新", 1600)
+        self.statusBar().showMessage("Text style updated", 1600)
 
     def _new_text_committed(
         self,
@@ -2321,12 +2346,12 @@ class MainWindow(QMainWindow):
                 underline,
             )
         except Exception as exc:
-            self._error(f"添加文字失败：{exc}")
+            self._error(f"Could not add text: {exc}")
             return
         self._rebuild_document()
         self.select_mode_action.setChecked(True)
         self._set_mode("select")
-        self.statusBar().showMessage("文字已添加", 1800)
+        self.statusBar().showMessage("Text added", 1800)
 
     def _move_selected_text(
         self,
@@ -2353,7 +2378,7 @@ class MainWindow(QMainWindow):
                 underline,
             )
         except Exception as exc:
-            self._error(f"移动文字失败：{exc}")
+            self._error(f"Could not move text: {exc}")
             self._render_current_page()
             return
         self._rebuild_document()
@@ -2369,7 +2394,7 @@ class MainWindow(QMainWindow):
             self.viewer.canvas.select_span(
                 new_span, (font, size, color, bold, italic, underline)
             )
-        self.statusBar().showMessage("文字位置已更新", 1800)
+        self.statusBar().showMessage("Text position updated", 1800)
 
     def _form_field_edited(self, field: FormField, value: str) -> None:
         if str(value) == field.value:
@@ -2377,13 +2402,13 @@ class MainWindow(QMainWindow):
         try:
             self.model.set_form_field(field, value)
         except Exception as exc:
-            self._error(f"填写表单失败：{exc}")
+            self._error(f"Could not update the form field: {exc}")
             self._render_current_page()
             return
         self._render_current_page()
         self.setWindowTitle(self._title())
         self._update_actions()
-        self.statusBar().showMessage(f"表单字段“{field.label}”已保存", 1800)
+        self.statusBar().showMessage(f'Form field "{field.label}" saved', 1800)
 
     def _ink_stroke_committed(
         self,
@@ -2394,13 +2419,13 @@ class MainWindow(QMainWindow):
         try:
             self.model.add_ink_stroke(self.current_page, points, color, width)
         except Exception as exc:
-            self._error(f"添加签名笔迹失败：{exc}")
+            self._error(f"Could not add the signature stroke: {exc}")
             self._render_current_page()
             return
         self._render_current_page()
         self.setWindowTitle(self._title())
         self._update_actions()
-        self.statusBar().showMessage("签名笔迹已添加，可继续绘制或按 Ctrl+Z 撤销", 1800)
+        self.statusBar().showMessage("Signature stroke added. Continue drawing or press Ctrl+Z to undo.", 1800)
 
     def _update_actions(self) -> None:
         opened = self.model.is_open
@@ -2423,11 +2448,13 @@ class MainWindow(QMainWindow):
         self.delete_page_action.setEnabled(opened and self.model.page_count > selected_count)
         self.undo_action.setEnabled(self.model.can_undo)
         self.redo_action.setEnabled(self.model.can_redo)
-        self.undo_action.setText(
-            f"撤销 {self.model.undo_label}" if self.model.undo_label else "撤销"
+        self.undo_action.setText("Undo")
+        self.undo_action.setToolTip(
+            f"Undo {self.model.undo_label}" if self.model.undo_label else "Undo"
         )
-        self.redo_action.setText(
-            f"重做 {self.model.redo_label}" if self.model.redo_label else "重做"
+        self.redo_action.setText("Redo")
+        self.redo_action.setToolTip(
+            f"Redo {self.model.redo_label}" if self.model.redo_label else "Redo"
         )
         self.prev_action.setEnabled(opened and self.current_page > 0)
         self.next_action.setEnabled(opened and self.current_page + 1 < self.model.page_count)
@@ -2438,48 +2465,48 @@ class MainWindow(QMainWindow):
     def _show_help(self) -> None:
         QMessageBox.information(
             self,
-            "使用说明",
-            "页面管理\n"
-            "• 左侧拖拽缩略图可重新排序\n"
-            "• 可多选页面后删除或旋转\n"
-            "• “插入 PDF”可选择页码范围和插入位置\n\n"
-            "文字编辑\n"
-            "• 单击选择文字，Delete 或 Backspace 直接删除\n"
-            "• 按住已选文字并拖动，可直接调整文本块位置\n"
-            "• 双击原文即可在页面原位修改；Enter 或点击别处确认，Esc 取消\n"
-            "• 字体、字号和颜色通过文字附近的浮动工具条修改\n"
-            "• 浮动工具条中的 B / I / U 可设置加粗、斜体和下划线\n"
-            "• 选择“添加文字”，点击页面位置后直接输入\n"
-            "• 扫描件或纯图片 PDF 没有文本层，无法直接选择文字\n\n"
-            "表单与签名\n"
-            "• 检测到可填写字段后，选择“填写表单”并直接点击蓝框输入\n"
-            "• 支持文本、复选、单选、下拉和列表字段，导出后仍可交互\n"
-            "• 选择“签名画笔”后按住鼠标绘制，右上角可调整颜色和粗细\n"
-            "• 每一笔都可通过 Ctrl+Z 撤销\n\n"
-            "浏览\n"
-            "• Ctrl + 鼠标滚轮缩放，PageUp/PageDown 翻页",
+            "User Guide",
+            "Page Management\n"
+            "• Drag thumbnails in the sidebar to reorder pages.\n"
+            "• Select multiple pages to delete or rotate them together.\n"
+            "• Insert PDF lets you choose a page range and insertion position.\n\n"
+            "Text Editing\n"
+            "• Click text to select it; press Delete or Backspace to remove it.\n"
+            "• Drag selected text to reposition the text block.\n"
+            "• Double-click text for inline editing; press Enter or click elsewhere to save, or Esc to cancel.\n"
+            "• Use the floating toolbar near the text to change font, size, and color.\n"
+            "• Use B / I / U on the floating toolbar for bold, italic, and underline.\n"
+            "• Select Add Text, click a page position, and start typing.\n"
+            "• Scans and image-only PDFs have no selectable text layer.\n\n"
+            "Forms and Signatures\n"
+            "• When fillable fields are detected, select Fill Form and click a blue outline.\n"
+            "• Text, checkbox, radio, combo, and list fields remain interactive after export.\n"
+            "• Select Signature Pen and drag to draw; adjust color and width in the top-right toolbar.\n"
+            "• Each stroke can be undone with Ctrl+Z.\n\n"
+            "Navigation\n"
+            "• Use Ctrl + mouse wheel to zoom and PageUp/PageDown to change pages.",
         )
 
     def _show_about(self) -> None:
         QMessageBox.about(
             self,
-            f"关于 {APP_NAME}",
+            f"About {APP_NAME}",
             f"<b>{APP_NAME} {APP_VERSION}</b><br>"
-            "轻量 PDF 浏览、页面整理、表单填写、签名与文本层编辑工具。<br><br>"
-            "完全免费并以 GNU AGPL v3 开源。<br>"
-            "PDF 引擎：PyMuPDF · 界面：Qt for Python<br><br>"
-            f'源代码：<a href="{PROJECT_URL}">{PROJECT_URL}</a>',
+            "A lightweight PDF viewer, page organizer, form filler, signature tool, and text-layer editor.<br><br>"
+            "Free and open-source under GNU AGPL v3.<br>"
+            "PDF engine: PyMuPDF | Interface: Qt for Python<br><br>"
+            f'Source code: <a href="{PROJECT_URL}">{PROJECT_URL}</a>',
         )
 
     def _show_licenses(self) -> None:
         QMessageBox.information(
             self,
-            "开源许可",
-            f"{APP_NAME} 按 GNU AGPL v3 许可发布。\n\n"
-            "PyMuPDF/MuPDF 使用 AGPL v3；Qt for Python/PySide6 使用其 GPL v3 "
-            "开源许可选项。其他第三方组件及完整许可文本请查看项目根目录的 "
-            "THIRD_PARTY_NOTICES.md 与 licenses 文件夹。\n\n"
-            f"完整源代码：{PROJECT_URL}",
+            "Open-source Licenses",
+            f"{APP_NAME} is released under GNU AGPL v3.\n\n"
+            "PyMuPDF/MuPDF is used under AGPL v3; Qt for Python/PySide6 is used under its GPL v3 "
+            "open-source license option. For other third-party components and complete license texts, see "
+            "THIRD_PARTY_NOTICES.md and the licenses directory in the project root.\n\n"
+            f"Complete source code: {PROJECT_URL}",
         )
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
@@ -2520,14 +2547,14 @@ def configure_application(app: QApplication) -> None:
     app.setOrganizationName(ORGANIZATION_NAME)
     app.setStyle("Fusion")
     app.setStyleSheet(APP_STYLE)
-    font_family = "Segoe UI"
-    windows_font = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts" / "msyh.ttc"
-    if windows_font.exists():
-        font_id = QFontDatabase.addApplicationFont(str(windows_font))
+    font_family = "Arial"
+    windows_fonts = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts"
+    for font_path in (windows_fonts / "segoeui.ttf", windows_fonts / "arial.ttf"):
+        if not font_path.exists():
+            continue
+        font_id = QFontDatabase.addApplicationFont(str(font_path))
         families = QFontDatabase.applicationFontFamilies(font_id)
-        if "Microsoft YaHei UI" in families:
-            font_family = "Microsoft YaHei UI"
-        elif families:
+        if families:
             font_family = families[0]
-    font = QFont(font_family, 9)
-    app.setFont(font)
+            break
+    app.setFont(QFont(font_family, 9))

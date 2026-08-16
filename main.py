@@ -43,9 +43,9 @@ def _install_exception_handler() -> None:
             pass
         QMessageBox.critical(
             None,
-            f"{APP_NAME} 遇到错误",
-            "程序遇到未预期的错误。\n\n"
-            f"错误记录已保存到本机 AppData 的 {APP_NAME} 文件夹。",
+            f"{APP_NAME} encountered an error",
+            "The application encountered an unexpected error.\n\n"
+            f"An error log was saved in the {APP_NAME} folder under AppData.",
         )
 
     sys.excepthook = handle_exception

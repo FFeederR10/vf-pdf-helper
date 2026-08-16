@@ -26,7 +26,7 @@ def main() -> int:
     model.add_text(
         0,
         (100, 760),
-        "字体冲突回归测试",
+        "Unicode font regression test Ω",
         BUILTIN_FONTS[0],
         12,
         (0, 0, 0),
@@ -34,15 +34,15 @@ def main() -> int:
     model.add_text(
         0,
         (100, 790),
-        "第二次字体写入",
+        "Second Unicode font write Δ",
         BUILTIN_FONTS[0],
         12,
         (0, 0, 0),
     )
     assert model.doc is not None
     extracted = model.doc.load_page(0).get_text().replace("\xa0", " ")
-    assert "字体冲突回归测试" in extracted
-    assert "第二次字体写入" in extracted
+    assert "Unicode font regression test Ω" in extracted
+    assert "Second Unicode font write Δ" in extracted
     if len(sys.argv) > 2:
         model.save_as(sys.argv[2])
     print("PASS: Chinese text inserted and remains extractable")

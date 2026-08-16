@@ -32,7 +32,7 @@ def test_window_opens_pdf(tmp_path: Path) -> None:
 
     assert window.model.page_count == 1
     assert window.viewer.isVisible() is False  # top-level window itself is not shown in the test
-    assert window.text_status.text().strip().endswith("个文本块")
+    assert window.text_status.text().strip().endswith("text blocks")
     assert window.viewer.canvas.pixmap() is not None
     window.model.close()
 

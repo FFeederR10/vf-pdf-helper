@@ -124,9 +124,9 @@ def test_text_replace_add_delete_and_undo(tmp_path: Path) -> None:
     model.replace_text(0, added_span, "", BUILTIN_FONTS[0], 14, (0, 0, 0))
     assert "NEW NOTE" not in model.doc.load_page(0).get_text()
 
-    assert model.undo() == "编辑文字"
+    assert model.undo() == "Edit text"
     assert "NEW NOTE" in model.doc.load_page(0).get_text()
-    assert model.redo() == "编辑文字"
+    assert model.redo() == "Edit text"
     assert "NEW NOTE" not in model.doc.load_page(0).get_text()
 
 
@@ -153,7 +153,7 @@ def test_move_text_repositions_once_and_can_be_undone(tmp_path: Path) -> None:
     assert moved.origin == pytest.approx(destination, abs=0.2)
     assert moved.origin != pytest.approx(target.origin, abs=0.2)
 
-    assert model.undo() == "移动文字"
+    assert model.undo() == "Move text"
     restored = next(span for span in model.text_spans(0) if span.text == "DRAWING-42")
     assert restored.origin == pytest.approx(target.origin, abs=0.2)
 
@@ -182,10 +182,10 @@ def test_chinese_text_uses_system_font_fallback(tmp_path: Path) -> None:
     make_pdf(source, ["BASE"])
     model = PdfDocumentModel()
     model.open_file(str(source))
-    model.add_text(0, (40, 230), "中文备注 123", BUILTIN_FONTS[0], 14, (0, 0, 0))
+    model.add_text(0, (40, 230), "Unicode note Ω 123", BUILTIN_FONTS[0], 14, (0, 0, 0))
     assert model.doc is not None
     extracted = model.doc.load_page(0).get_text().replace("\xa0", " ")
-    assert "中文备注 123" in extracted
+    assert "Unicode note Ω 123" in extracted
 
 
 def test_non_font_resource_name_collision_does_not_break_text_insertion(tmp_path: Path) -> None:
@@ -220,10 +220,10 @@ def test_non_font_resource_name_collision_does_not_break_text_insertion(tmp_path
 
     model = PdfDocumentModel()
     model.open_file(str(source))
-    model.add_text(0, (40, 100), "冲突后仍可写入", BUILTIN_FONTS[0], 14, (0, 0, 0))
+    model.add_text(0, (40, 100), "Text remains writable after conflict Ω", BUILTIN_FONTS[0], 14, (0, 0, 0))
     assert model.doc is not None
     extracted = model.doc.load_page(0).get_text().replace("\xa0", " ")
-    assert "冲突后仍可写入" in extracted
+    assert "Text remains writable after conflict Ω" in extracted
 
 
 def test_fillable_form_fields_remain_interactive_and_undoable(tmp_path: Path) -> None:
@@ -247,7 +247,7 @@ def test_fillable_form_fields_remain_interactive_and_undoable(tmp_path: Path) ->
     assert filled["full_name"].value == "Bob Chen"
     assert filled["agree"].value != "Off"
     assert filled["country"].value == "China"
-    assert model.undo() == "填写表单"
+    assert model.undo() == "Fill form"
     assert {field.name: field.value for field in model.form_fields(0)}["country"] == "Australia"
 
     model.redo()

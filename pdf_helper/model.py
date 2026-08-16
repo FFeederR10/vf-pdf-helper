@@ -144,9 +144,9 @@ def available_fonts() -> tuple[FontChoice, ...]:
     fonts = [BUILTIN_FONTS[0], BUILTIN_FONTS[2], BUILTIN_FONTS[4]]
     windows = Path(os.environ.get("WINDIR", r"C:\Windows")) / "Fonts"
     candidates = (
-        ("微软雅黑", "yahei", windows / "msyh.ttc"),
-        ("宋体", "simsun", windows / "simsun.ttc"),
-        ("黑体", "simhei", windows / "simhei.ttf"),
+        ("Microsoft YaHei", "yahei", windows / "msyh.ttc"),
+        ("SimSun", "simsun", windows / "simsun.ttc"),
+        ("SimHei", "simhei", windows / "simhei.ttf"),
         ("Arial", "arial", windows / "arial.ttf"),
     )
     for label, name, path in candidates:
@@ -205,14 +205,14 @@ class PdfDocumentModel:
             data = Path(path).read_bytes()
             doc = pymupdf.open(stream=data, filetype="pdf")
         except Exception as exc:
-            raise PdfError(f"无法打开 PDF：{exc}") from exc
+            raise PdfError(f"Could not open the PDF: {exc}") from exc
 
         if not doc.is_pdf:
             doc.close()
-            raise PdfError("所选文件不是有效的 PDF。")
+            raise PdfError("The selected file is not a valid PDF.")
         if doc.needs_pass and (not password or not doc.authenticate(password)):
             doc.close()
-            raise PasswordRequired("此 PDF 需要密码，或输入的密码不正确。")
+            raise PasswordRequired("This PDF requires a password, or the password is incorrect.")
 
         self.close()
         self.doc = doc
@@ -222,7 +222,7 @@ class PdfDocumentModel:
 
     def _require_doc(self) -> pymupdf.Document:
         if not self.is_open:
-            raise PdfError("请先打开一个 PDF 文件。")
+            raise PdfError("Open a PDF file first.")
         assert self.doc is not None
         return self.doc
 
@@ -350,7 +350,7 @@ class PdfDocumentModel:
                     page_index=page_index,
                     xref=int(widget.xref),
                     name=str(widget.field_name or f"field-{widget.xref}"),
-                    label=str(widget.field_label or widget.field_name or "表单字段"),
+                    label=str(widget.field_label or widget.field_name or "Form field"),
                     field_type=field_type,
                     field_type_string=str(widget.field_type_string or "Unknown"),
                     value=str(value),
@@ -373,7 +373,7 @@ class PdfDocumentModel:
 
     def set_form_field(self, field: FormField, value: str) -> None:
         if field.read_only:
-            raise PdfError("这个表单字段是只读的。")
+            raise PdfError("This form field is read-only.")
         doc = self._require_doc()
         page = doc.load_page(field.page_index)
         widget = page.load_widget(field.xref)
@@ -383,11 +383,11 @@ class PdfDocumentModel:
                 None,
             )
         if widget is None:
-            raise PdfError("找不到这个表单字段，请重新打开 PDF 后再试。")
+            raise PdfError("This form field could not be found. Reopen the PDF and try again.")
         current = str(widget.field_value or "")
         if current == str(value):
             return
-        self._checkpoint("填写表单")
+        self._checkpoint("Fill form")
         widget.field_value = str(value)
         widget.update()
         self.modified = True
@@ -399,8 +399,8 @@ class PdfDocumentModel:
         if order_list == list(range(doc.page_count)):
             return
         if sorted(order_list) != list(range(doc.page_count)):
-            raise PdfError("页面顺序无效，请重新尝试。")
-        self._checkpoint("重新排列页面")
+            raise PdfError("The page order is invalid. Try again.")
+        self._checkpoint("Reorder pages")
         doc.select(order_list)
         self.modified = True
 
@@ -410,10 +410,10 @@ class PdfDocumentModel:
         if not indices:
             return
         if indices[0] < 0 or indices[-1] >= doc.page_count:
-            raise PdfError("要删除的页码无效。")
+            raise PdfError("The page selection is invalid.")
         if len(indices) == doc.page_count:
-            raise PdfError("PDF 至少需要保留一页。")
-        self._checkpoint("删除页面")
+            raise PdfError("A PDF must contain at least one page.")
+        self._checkpoint("Delete pages")
         doc.delete_pages(indices)
         self.modified = True
 
@@ -429,19 +429,19 @@ class PdfDocumentModel:
         try:
             source = pymupdf.open(source_path)
         except Exception as exc:
-            raise PdfError(f"无法打开要插入的 PDF：{exc}") from exc
+            raise PdfError(f"Could not open the PDF to insert: {exc}") from exc
         try:
             if not source.is_pdf:
-                raise PdfError("要插入的文件不是有效的 PDF。")
+                raise PdfError("The file to insert is not a valid PDF.")
             if source.needs_pass and (not password or not source.authenticate(password)):
-                raise PasswordRequired("要插入的 PDF 需要密码，或密码不正确。")
+                raise PasswordRequired("The PDF to insert requires a password, or the password is incorrect.")
             if source.page_count == 0:
-                raise PdfError("要插入的 PDF 没有页面。")
+                raise PdfError("The PDF to insert has no pages.")
             last = source.page_count - 1 if to_page is None else to_page
             if from_page < 0 or last < from_page or last >= source.page_count:
-                raise PdfError("插入页码范围无效。")
+                raise PdfError("The page range to insert is invalid.")
             insert_at = max(0, min(insert_at, doc.page_count))
-            self._checkpoint("插入 PDF")
+            self._checkpoint("Insert PDF")
             doc.insert_pdf(source, from_page=from_page, to_page=last, start_at=insert_at)
             self.modified = True
             return last - from_page + 1
@@ -453,7 +453,7 @@ class PdfDocumentModel:
         doc = self._require_doc()
         if not indices:
             return
-        self._checkpoint("旋转页面")
+        self._checkpoint("Rotate pages")
         for index in indices:
             page = doc.load_page(index)
             page.set_rotation((page.rotation + degrees) % 360)
@@ -465,7 +465,7 @@ class PdfDocumentModel:
             return font.pdf_name
         if not _font_allows_editable_embedding(font.file_path):
             raise PdfError(
-                "所选字体的许可不允许嵌入可继续编辑的 PDF，请换用其他字体。"
+                "The selected font license does not permit editable PDF embedding. Choose another font."
             )
         digest = hashlib.sha1(font.file_path.lower().encode("utf-8")).hexdigest()[:10]
         base_name = f"PHF{digest}"
@@ -501,7 +501,10 @@ class PdfDocumentModel:
                 (choice for choice in available_fonts() if choice.file_path), None
             )
             if unicode_font is None:
-                raise PdfError("当前系统未找到可写入中文的字体，请选择一个中文字体。")
+                raise PdfError(
+                    "No installed font suitable for these Unicode characters was found. "
+                    "Select an installed Unicode font."
+                )
             font = unicode_font
         font, synthetic_bold, synthetic_italic = PdfDocumentModel._styled_font(
             font, bold, italic
@@ -615,7 +618,7 @@ class PdfDocumentModel:
         underline: bool = False,
     ) -> None:
         doc = self._require_doc()
-        self._checkpoint("编辑文字")
+        self._checkpoint("Edit text")
         page = doc.load_page(page_index)
         self._erase_span(page, span)
         if replacement:
@@ -665,8 +668,8 @@ class PdfDocumentModel:
         page = doc.load_page(page_index)
         moved_rect = pymupdf.Rect(span.bbox) + (dx, dy, dx, dy)
         if not page.rect.contains(moved_rect):
-            raise PdfError("文字不能移动到页面外。")
-        self._checkpoint("移动文字")
+            raise PdfError("Text cannot be moved outside the page.")
+        self._checkpoint("Move text")
         self._erase_span(page, span)
         self._insert_lines(
             page, point, span.text, font, font_size, color, bold, italic, underline
@@ -687,12 +690,12 @@ class PdfDocumentModel:
         underline: bool = False,
     ) -> None:
         if not text:
-            raise PdfError("请输入要添加的文字。")
+            raise PdfError("Enter the text to add.")
         doc = self._require_doc()
         page = doc.load_page(page_index)
         if not page.rect.contains(pymupdf.Point(point)):
-            raise PdfError("文字位置不在当前页面内。")
-        self._checkpoint("添加文字")
+            raise PdfError("The text position is outside the current page.")
+        self._checkpoint("Add text")
         self._insert_lines(page, point, text, font, font_size, color, bold, italic, underline)
         self.modified = True
 
@@ -710,8 +713,8 @@ class PdfDocumentModel:
             point_list.append((point_list[0][0] + 0.15, point_list[0][1] + 0.15))
         page = self._require_doc().load_page(page_index)
         if any(not page.rect.contains(pymupdf.Point(point)) for point in point_list):
-            raise PdfError("签名笔迹不能画到页面外。")
-        self._checkpoint("添加签名笔迹")
+            raise PdfError("A signature stroke cannot extend outside the page.")
+        self._checkpoint("Add signature stroke")
         annot = page.add_ink_annot([point_list])
         annot.set_colors(stroke=color)
         annot.set_border(width=max(0.5, min(float(width), 20.0)))
@@ -736,7 +739,7 @@ class PdfDocumentModel:
             check = pymupdf.open(temp_path)
             try:
                 if not check.is_pdf or check.page_count != doc.page_count:
-                    raise PdfError("导出校验失败：生成文件的页数不一致。")
+                    raise PdfError("Export verification failed: the page count does not match.")
             finally:
                 check.close()
             os.replace(temp_path, target)
@@ -744,7 +747,7 @@ class PdfDocumentModel:
         except PdfError:
             raise
         except Exception as exc:
-            raise PdfError(f"导出 PDF 失败：{exc}") from exc
+            raise PdfError(f"Could not export the PDF: {exc}") from exc
         finally:
             if temp_path and os.path.exists(temp_path):
                 os.unlink(temp_path)
