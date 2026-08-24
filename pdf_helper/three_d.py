@@ -121,9 +121,9 @@ GL_TRIANGLE_FAN = 0x0006
 GL_LINES = 0x0001
 
 U3D_QUALITY_LEVELS = (
-    ("Balanced", 500_000),
-    ("High", 1_500_000),
-    ("Full", 10_000_000),
+    ("Complete", None),
+    ("High (incomplete)", 1_500_000),
+    ("Fast (incomplete)", 500_000),
 )
 GL_LINE_STRIP = 0x0003
 GL_LINE_LOOP = 0x0002
@@ -630,7 +630,7 @@ class _U3DDecoderWorker(QObject):
         self,
         model_data: bytes,
         stop_event: threading.Event,
-        max_triangles: int = 500_000,
+        max_triangles: int | None = None,
     ) -> None:
         super().__init__()
         self._model_data = model_data
@@ -692,11 +692,12 @@ class ThreeDViewerDialog(QDialog):
         for label, triangle_limit in U3D_QUALITY_LEVELS:
             self.detail_combo.addItem(label, triangle_limit)
         self.detail_combo.setToolTip(
-            "Balanced opens fastest. High and Full decode more geometry and may use substantially more memory."
+            "Complete loads every supported triangle and is the default. "
+            "High and Fast are optional incomplete previews."
         )
-        outlines = QCheckBox("Outlines")
-        outlines.setChecked(True)
-        outlines.toggled.connect(self.canvas.set_outlines)
+        self.outlines_checkbox = QCheckBox("Outlines")
+        self.outlines_checkbox.setChecked(True)
+        self.outlines_checkbox.toggled.connect(self.canvas.set_outlines)
         wireframe = QCheckBox("Wireframe")
         wireframe.toggled.connect(self.canvas.set_wireframe)
         lighting = QCheckBox("Lighting")
@@ -710,7 +711,7 @@ class ThreeDViewerDialog(QDialog):
         close.clicked.connect(self.close)
         controls.addWidget(detail_label)
         controls.addWidget(self.detail_combo)
-        controls.addWidget(outlines)
+        controls.addWidget(self.outlines_checkbox)
         controls.addWidget(wireframe)
         controls.addWidget(lighting)
         controls.addWidget(reset)
@@ -748,7 +749,7 @@ class ThreeDViewerDialog(QDialog):
         if self._model_format == "PRC":
             detail_label.hide()
             self.detail_combo.hide()
-            outlines.hide()
+            self.outlines_checkbox.hide()
             self.loading_panel.hide()
             self._temp_dir = tempfile.TemporaryDirectory(prefix="vf-pdf-helper-3d-")
             model_path = Path(self._temp_dir.name) / "embedded-model.prc"
@@ -761,21 +762,29 @@ class ThreeDViewerDialog(QDialog):
         elif self._model_format == "U3D":
             self.canvas.hide()
             self.instructions.setText(
-                "Large U3D assemblies are decoded as a bounded interactive preview."
+                "Complete mode loads every supported triangle and may take some time."
             )
             self.detail_combo.currentIndexChanged.connect(self._u3d_quality_changed)
-            self._start_u3d_decode(model_data, int(self.detail_combo.currentData()))
+            self._start_u3d_decode(model_data, self._selected_triangle_limit())
         else:
             raise ThreeDViewError(f"The built-in viewer does not support {self._model_format} models.")
 
-    def _start_u3d_decode(self, model_data: bytes, max_triangles: int) -> None:
+    def _selected_triangle_limit(self) -> int | None:
+        value = self.detail_combo.currentData()
+        return None if value is None else int(value)
+
+    def _start_u3d_decode(
+        self,
+        model_data: bytes,
+        max_triangles: int | None,
+    ) -> None:
         self._decode_stop.clear()
         self.detail_combo.setEnabled(False)
         self.canvas.hide()
         self.loading_panel.show()
         self.loading_progress.setValue(0)
         self.loading_label.setText(
-            f"Preparing {self.detail_combo.currentText().lower()} U3D preview..."
+            f"Preparing {self.detail_combo.currentText().lower()} U3D model..."
         )
         thread = QThread(self)
         worker = _U3DDecoderWorker(model_data, self._decode_stop, max_triangles)
@@ -804,7 +813,7 @@ class ThreeDViewerDialog(QDialog):
             return
         self._start_u3d_decode(
             self._u3d_model_data,
-            int(self.detail_combo.currentData()),
+            self._selected_triangle_limit(),
         )
 
     @Slot(int, str)
@@ -824,6 +833,9 @@ class ThreeDViewerDialog(QDialog):
         preview_note = ""
         if scene.omitted_faces:
             preview_note = f" | preview {scene.rendered_faces:,}/{scene.source_faces:,} faces"
+        else:
+            preview_note = f" | {scene.source_faces:,} faces | complete"
+        self.outlines_checkbox.setVisible(bool(scene.proxy_instances))
         self.title.setText(
             f"U3D model | {scene.resource_count:,} resources | "
             f"{scene.instance_count - scene.proxy_instances:,}/{scene.instance_count:,} detailed instances"

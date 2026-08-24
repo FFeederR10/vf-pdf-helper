@@ -16,7 +16,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args:
         raise SystemExit(
             "Usage: python -m scripts.visual_qa_3d input-3d.pdf [output.png] "
-            "[balanced|high|full]"
+            "[complete|high|fast]"
         )
     source = Path(args[0]).resolve()
     output = (
@@ -25,10 +25,16 @@ def main(argv: list[str] | None = None) -> int:
         else Path("tmp/pdfs/vf-pdf-helper-3d-view.png").resolve()
     )
     output.parent.mkdir(parents=True, exist_ok=True)
-    quality = args[2].lower() if len(args) > 2 else "balanced"
-    quality_indices = {"balanced": 0, "high": 1, "full": 2}
+    quality = args[2].lower() if len(args) > 2 else "complete"
+    quality_indices = {
+        "complete": 0,
+        "full": 0,
+        "high": 1,
+        "fast": 2,
+        "balanced": 2,
+    }
     if quality not in quality_indices:
-        raise SystemExit("U3D quality must be balanced, high, or full.")
+        raise SystemExit("U3D quality must be complete, high, or fast.")
 
     model = PdfDocumentModel()
     model.open_file(str(source))

@@ -2642,7 +2642,7 @@ class MainWindow(QMainWindow):
             "3D PDFs\n"
             "• The first supported 3D object opens automatically when a PDF is loaded.\n"
             "• PRC and U3D models open in the built-in viewer: drag to rotate, Shift+drag to pan, and use the wheel to zoom.\n"
-            "• Large U3D assemblies use a balanced bounded preview; Outlines shows or hides proxies for omitted detail.\n"
+            "• Complete U3D geometry loads by default; optional High/Fast modes are explicitly marked incomplete.\n"
             "• Activate interactive 3D content only when you trust the PDF.\n\n"
             "Navigation\n"
             "• Use Ctrl + mouse wheel to zoom and PageUp/PageDown to change pages.",

@@ -7,7 +7,7 @@ import numpy as np
 
 from PySide6.QtTest import QSignalSpy
 
-from pdf_helper.three_d import _U3DDecoderWorker
+from pdf_helper.three_d import U3D_QUALITY_LEVELS, _U3DDecoderWorker
 from pdf_helper.u3d import _plan_preview_selection, decode_u3d_scene
 
 
@@ -116,3 +116,10 @@ def test_preview_selection_balances_large_mesh_detail_with_scene_coverage() -> N
     assert selection["large"] == 100
     assert all(selection[f"small-{index}"] == 10 for index in range(10))
     assert sum(selection[name] * instances for name, _, instances in resources) == 200
+
+
+def test_complete_geometry_is_the_default_u3d_quality() -> None:
+    label, triangle_limit = U3D_QUALITY_LEVELS[0]
+
+    assert label == "Complete"
+    assert triangle_limit is None

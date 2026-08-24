@@ -97,6 +97,7 @@ _MAX_BLOCKS = 250_000
 _MAX_RESOURCES = 100_000
 _MAX_NODES = 250_000
 _MAX_ELEMENTS_PER_RESOURCE = 50_000_000
+_MAX_COMPLETE_TRIANGLES = 10_000_000
 _MAX_MATERIALS = 65_536
 _MAX_NAME_BYTES = 1_048_576
 
@@ -803,20 +804,22 @@ def _plan_preview_selection(
 def decode_u3d_scene(
     data: bytes,
     *,
-    max_triangles: int = 1_000_000,
+    max_triangles: int | None = 1_000_000,
     progress: Callable[[int, str], None] | None = None,
     cancelled: Callable[[], bool] | None = None,
 ) -> U3DScene:
-    """Decode a bounded, representative U3D CLOD base-mesh preview.
+    """Decode U3D CLOD base meshes, optionally using a bounded preview.
 
-    Large assemblies are ranked by their expanded triangle contribution and
-    decoded up to ``max_triangles``. This keeps interactive GPU memory bounded
-    while preserving the most visually significant parts of the model.
+    ``max_triangles=None`` requires complete supported triangle geometry and
+    fails explicitly rather than silently truncating a model. Integer limits
+    create a representative preview for users who deliberately prefer speed.
     """
 
     if not data or len(data) > _MAX_STREAM_BYTES:
         raise U3DDecodeError("The U3D stream is empty or exceeds the 512 MB safety limit.")
-    if max_triangles < 1 or max_triangles > 10_000_000:
+    if max_triangles is not None and (
+        max_triangles < 1 or max_triangles > _MAX_COMPLETE_TRIANGLES
+    ):
         raise U3DDecodeError("The U3D preview triangle limit is invalid.")
     notify = progress or (lambda _percent, _message: None)
     is_cancelled = cancelled or (lambda: False)
@@ -888,9 +891,24 @@ def decode_u3d_scene(
         instance_count += len(transforms)
         preview_resources.append((name, base_counts[0], len(transforms)))
 
+    complete = max_triangles is None
+    if complete:
+        if progressive_names:
+            raise U3DDecodeError(
+                "Complete mode cannot yet decode U3D progressive mesh refinements. "
+                "The model was not opened because displaying incomplete geometry is disabled."
+            )
+        if source_faces > _MAX_COMPLETE_TRIANGLES:
+            raise U3DDecodeError(
+                f"This U3D model contains {source_faces:,} expanded faces, above the "
+                f"{_MAX_COMPLETE_TRIANGLES:,}-face complete-render safety limit. "
+                "The model was not opened because displaying incomplete geometry is disabled."
+            )
+    triangle_budget = source_faces if complete else max_triangles
+    assert triangle_budget is not None
     selected = _plan_preview_selection(
         preview_resources,
-        max_triangles=max_triangles,
+        max_triangles=triangle_budget,
     )
     if not selected:
         raise U3DDecodeError("The U3D preview limit is too small for this model.")
@@ -916,7 +934,11 @@ def decode_u3d_scene(
         rendered_faces += len(faces) * len(transforms)
     selected_names = {name for name, _ in selected}
     proxy, proxy_instances = _proxy_mesh(
-        [name for name in paired_names if name not in selected_names],
+        [
+            name
+            for name in paired_names
+            if name not in selected_names and counts[name][0] > 0
+        ],
         bounds,
         occurrences,
     )
@@ -924,7 +946,12 @@ def decode_u3d_scene(
         meshes.append(proxy)
     if not meshes:
         raise U3DDecodeError("The U3D base meshes contain no renderable triangles.")
-    notify(100, "U3D preview ready")
+    if complete and (rendered_faces != source_faces or proxy_instances):
+        raise U3DDecodeError(
+            "Complete U3D decoding did not produce every supported triangle. "
+            "The incomplete model was not displayed."
+        )
+    notify(100, "Complete U3D model ready" if complete else "U3D preview ready")
     return U3DScene(
         meshes=tuple(meshes),
         resource_count=len(paired_names),
