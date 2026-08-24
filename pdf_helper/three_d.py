@@ -27,6 +27,7 @@ from PySide6.QtOpenGL import (
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDialog,
     QHBoxLayout,
     QLabel,
@@ -118,6 +119,12 @@ GL_TRIANGLES = 0x0004
 GL_TRIANGLE_STRIP = 0x0005
 GL_TRIANGLE_FAN = 0x0006
 GL_LINES = 0x0001
+
+U3D_QUALITY_LEVELS = (
+    ("Balanced", 500_000),
+    ("High", 1_500_000),
+    ("Full", 10_000_000),
+)
 GL_LINE_STRIP = 0x0003
 GL_LINE_LOOP = 0x0002
 
@@ -370,6 +377,12 @@ class PrcCanvas(QOpenGLWidget):
             primitives=len(meshes),
             vertices=sum(len(mesh.positions) for mesh in meshes),
         )
+        if self.isValid() and self._gl is not None:
+            try:
+                self.makeCurrent()
+                self._upload_meshes()
+            finally:
+                self.doneCurrent()
         self.reset_view()
         return self.stats
 
@@ -613,17 +626,23 @@ class _U3DDecoderWorker(QObject):
     failed = Signal(str)
     cancelled = Signal()
 
-    def __init__(self, model_data: bytes, stop_event: threading.Event) -> None:
+    def __init__(
+        self,
+        model_data: bytes,
+        stop_event: threading.Event,
+        max_triangles: int = 500_000,
+    ) -> None:
         super().__init__()
         self._model_data = model_data
         self._stop_event = stop_event
+        self._max_triangles = max_triangles
 
     @Slot()
     def run(self) -> None:
         try:
             scene = decode_u3d_scene(
                 self._model_data,
-                max_triangles=500_000,
+                max_triangles=self._max_triangles,
                 progress=self.progress.emit,
                 cancelled=self._stop_event.is_set,
             )
@@ -657,6 +676,7 @@ class ThreeDViewerDialog(QDialog):
         self._decode_stop = threading.Event()
         self._close_after_decode = False
         self._model_format = model_format.upper()
+        self._u3d_model_data = model_data if self._model_format == "U3D" else b""
         self.canvas = PrcCanvas(self)
 
         layout = QVBoxLayout(self)
@@ -667,6 +687,13 @@ class ThreeDViewerDialog(QDialog):
         self.title.setStyleSheet("font-weight:600;color:#172033;")
         controls.addWidget(self.title)
         controls.addStretch(1)
+        detail_label = QLabel("Detail")
+        self.detail_combo = QComboBox()
+        for label, triangle_limit in U3D_QUALITY_LEVELS:
+            self.detail_combo.addItem(label, triangle_limit)
+        self.detail_combo.setToolTip(
+            "Balanced opens fastest. High and Full decode more geometry and may use substantially more memory."
+        )
         outlines = QCheckBox("Outlines")
         outlines.setChecked(True)
         outlines.toggled.connect(self.canvas.set_outlines)
@@ -681,6 +708,8 @@ class ThreeDViewerDialog(QDialog):
         external.clicked.connect(self.open_external_requested)
         close = QPushButton("Close")
         close.clicked.connect(self.close)
+        controls.addWidget(detail_label)
+        controls.addWidget(self.detail_combo)
         controls.addWidget(outlines)
         controls.addWidget(wireframe)
         controls.addWidget(lighting)
@@ -717,6 +746,8 @@ class ThreeDViewerDialog(QDialog):
         layout.addWidget(self.instructions)
 
         if self._model_format == "PRC":
+            detail_label.hide()
+            self.detail_combo.hide()
             outlines.hide()
             self.loading_panel.hide()
             self._temp_dir = tempfile.TemporaryDirectory(prefix="vf-pdf-helper-3d-")
@@ -732,13 +763,22 @@ class ThreeDViewerDialog(QDialog):
             self.instructions.setText(
                 "Large U3D assemblies are decoded as a bounded interactive preview."
             )
-            self._start_u3d_decode(model_data)
+            self.detail_combo.currentIndexChanged.connect(self._u3d_quality_changed)
+            self._start_u3d_decode(model_data, int(self.detail_combo.currentData()))
         else:
             raise ThreeDViewError(f"The built-in viewer does not support {self._model_format} models.")
 
-    def _start_u3d_decode(self, model_data: bytes) -> None:
+    def _start_u3d_decode(self, model_data: bytes, max_triangles: int) -> None:
+        self._decode_stop.clear()
+        self.detail_combo.setEnabled(False)
+        self.canvas.hide()
+        self.loading_panel.show()
+        self.loading_progress.setValue(0)
+        self.loading_label.setText(
+            f"Preparing {self.detail_combo.currentText().lower()} U3D preview..."
+        )
         thread = QThread(self)
-        worker = _U3DDecoderWorker(model_data, self._decode_stop)
+        worker = _U3DDecoderWorker(model_data, self._decode_stop, max_triangles)
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         worker.progress.connect(self._u3d_progress)
@@ -753,6 +793,19 @@ class ThreeDViewerDialog(QDialog):
         self._decode_thread = thread
         self._decode_worker = worker
         thread.start()
+
+    @Slot(int)
+    def _u3d_quality_changed(self, _index: int) -> None:
+        if (
+            self._model_format != "U3D"
+            or not self._u3d_model_data
+            or (self._decode_thread is not None and self._decode_thread.isRunning())
+        ):
+            return
+        self._start_u3d_decode(
+            self._u3d_model_data,
+            int(self.detail_combo.currentData()),
+        )
 
     @Slot(int, str)
     def _u3d_progress(self, percent: int, message: str) -> None:
@@ -773,7 +826,8 @@ class ThreeDViewerDialog(QDialog):
             preview_note = f" | preview {scene.rendered_faces:,}/{scene.source_faces:,} faces"
         self.title.setText(
             f"U3D model | {scene.resource_count:,} resources | "
-            f"{scene.instance_count:,} instances{preview_note}"
+            f"{scene.instance_count - scene.proxy_instances:,}/{scene.instance_count:,} detailed instances"
+            f"{preview_note}"
             + (
                 f" | {scene.proxy_instances:,} outline proxies"
                 if scene.proxy_instances
@@ -804,6 +858,8 @@ class ThreeDViewerDialog(QDialog):
             thread.deleteLater()
         if self._close_after_decode:
             self.close()
+        elif self._model_format == "U3D":
+            self.detail_combo.setEnabled(True)
 
     def closeEvent(self, event: QCloseEvent) -> None:  # type: ignore[override]
         if self._decode_thread is not None and self._decode_thread.isRunning():
@@ -815,4 +871,5 @@ class ThreeDViewerDialog(QDialog):
         if self._temp_dir is not None:
             self._temp_dir.cleanup()
             self._temp_dir = None
+        self._u3d_model_data = b""
         super().closeEvent(event)

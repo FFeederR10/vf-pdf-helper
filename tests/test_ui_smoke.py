@@ -53,18 +53,26 @@ def test_window_opens_pdf(tmp_path: Path) -> None:
     window.model.close()
 
 
-def test_window_detects_3d_pdf_and_enables_view_action(tmp_path: Path) -> None:
+def test_window_detects_3d_pdf_enables_action_and_opens_view(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     path = tmp_path / "three-d.pdf"
     make_3d_pdf(path)
     app = QApplication.instance() or QApplication([])
     configure_application(app)
     window = MainWindow()
+    opened_pages: list[int] = []
+    monkeypatch.setattr(
+        window, "_open_three_d_view", lambda: opened_pages.append(window.current_page)
+    )
     window.open_path(str(path))
     app.processEvents()
 
     assert window.three_d_action.isEnabled()
     assert "1 3D model(s) (PRC)" in window.text_status.text()
+    assert opened_pages == [0]
     window.model.close()
+    window.close()
 
 
 def test_double_click_edits_text_inline(tmp_path: Path) -> None:

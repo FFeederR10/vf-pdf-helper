@@ -8,7 +8,7 @@ import numpy as np
 from PySide6.QtTest import QSignalSpy
 
 from pdf_helper.three_d import _U3DDecoderWorker
-from pdf_helper.u3d import decode_u3d_scene
+from pdf_helper.u3d import _plan_preview_selection, decode_u3d_scene
 
 
 FILE_HEADER = 0x00443355
@@ -104,3 +104,15 @@ def test_u3d_worker_decodes_without_an_external_viewer() -> None:
     assert failed.count() == 0
     scene = decoded.at(0)[0]
     assert scene.rendered_faces == 1
+
+
+def test_preview_selection_balances_large_mesh_detail_with_scene_coverage() -> None:
+    resources = [("large", 1_000, 1)] + [
+        (f"small-{index}", 10, 1) for index in range(10)
+    ]
+
+    selection = dict(_plan_preview_selection(resources, max_triangles=200))
+
+    assert selection["large"] == 100
+    assert all(selection[f"small-{index}"] == 10 for index in range(10))
+    assert sum(selection[name] * instances for name, _, instances in resources) == 200

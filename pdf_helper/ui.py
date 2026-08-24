@@ -1985,18 +1985,28 @@ class MainWindow(QMainWindow):
             except PdfError as exc:
                 self._error(str(exc))
                 return
-        self.current_page = 0
+        auto_three_d_page: int | None = None
+        for page_index in range(self.model.page_count):
+            models = self.model.three_d_annotations(page_index)
+            if any(model.format in {"PRC", "U3D"} for model in models):
+                auto_three_d_page = page_index
+                break
+        self.current_page = auto_three_d_page if auto_three_d_page is not None else 0
         self.current_span = None
         self.fit_width = True
         self._show_document_state()
         self._rebuild_document()
         form_count = self.model.form_field_count
         self.statusBar().showMessage(
-            f"PDF opened with {form_count} fillable form field(s)"
+            "PDF opened; opening the embedded 3D model"
+            if auto_three_d_page is not None
+            else f"PDF opened with {form_count} fillable form field(s)"
             if form_count
             else "PDF opened",
             3500 if form_count else 2500,
         )
+        if auto_three_d_page is not None:
+            QTimer.singleShot(0, self._open_three_d_view)
 
     def export_dialog(self) -> bool:
         if not self.model.is_open:
@@ -2630,9 +2640,9 @@ class MainWindow(QMainWindow):
             "• Select Signature Pen and drag to draw; adjust color and width in the top-right toolbar.\n"
             "• Each stroke can be undone with Ctrl+Z.\n\n"
             "3D PDFs\n"
-            "• When a page contains a 3D annotation, select 3D on the toolbar.\n"
-            "• PRC models open in the built-in viewer: drag to rotate, Shift+drag to pan, and use the wheel to zoom.\n"
-            "• U3D models retain their 2D poster and can be handed off to an installed Adobe Acrobat or Reader.\n"
+            "• The first supported 3D object opens automatically when a PDF is loaded.\n"
+            "• PRC and U3D models open in the built-in viewer: drag to rotate, Shift+drag to pan, and use the wheel to zoom.\n"
+            "• Large U3D assemblies use a balanced bounded preview; Outlines shows or hides proxies for omitted detail.\n"
             "• Activate interactive 3D content only when you trust the PDF.\n\n"
             "Navigation\n"
             "• Use Ctrl + mouse wheel to zoom and PageUp/PageDown to change pages.",
@@ -2643,9 +2653,9 @@ class MainWindow(QMainWindow):
             self,
             f"About {APP_NAME}",
             f"<b>{APP_NAME} {APP_VERSION}</b><br>"
-            "A lightweight PDF and PRC 3D viewer, page organizer, form filler, signature tool, and text-layer editor.<br><br>"
+            "A lightweight PDF and PRC/U3D 3D viewer, page organizer, form filler, signature tool, and text-layer editor.<br><br>"
             "Free and open-source under GNU AGPL v3.<br>"
-            "PDF engine: PyMuPDF | 3D engine: nanoPRC | Interface: Qt for Python<br><br>"
+            "PDF engine: PyMuPDF | 3D engines: nanoPRC and VF U3D decoder | Interface: Qt for Python<br><br>"
             f'Source code: <a href="{PROJECT_URL}">{PROJECT_URL}</a>',
         )
 

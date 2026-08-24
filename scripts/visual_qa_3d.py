@@ -14,7 +14,10 @@ from pdf_helper.ui import configure_application
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not args:
-        raise SystemExit("Usage: python -m scripts.visual_qa_3d input-3d.pdf [output.png]")
+        raise SystemExit(
+            "Usage: python -m scripts.visual_qa_3d input-3d.pdf [output.png] "
+            "[balanced|high|full]"
+        )
     source = Path(args[0]).resolve()
     output = (
         Path(args[1]).resolve()
@@ -22,6 +25,10 @@ def main(argv: list[str] | None = None) -> int:
         else Path("tmp/pdfs/vf-pdf-helper-3d-view.png").resolve()
     )
     output.parent.mkdir(parents=True, exist_ok=True)
+    quality = args[2].lower() if len(args) > 2 else "balanced"
+    quality_indices = {"balanced": 0, "high": 1, "full": 2}
+    if quality not in quality_indices:
+        raise SystemExit("U3D quality must be balanced, high, or full.")
 
     model = PdfDocumentModel()
     model.open_file(str(source))
@@ -38,7 +45,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     dialog.show()
 
-    result = {"ok": False}
+    result = {"ok": False, "quality_selected": False}
     window_output = output.with_name(f"{output.stem}-window.png")
 
     def capture() -> None:
@@ -53,6 +60,19 @@ def main(argv: list[str] | None = None) -> int:
 
     def wait_until_ready() -> None:
         if annotation.format == "U3D" and dialog.loading_panel.isVisible():
+            QTimer.singleShot(250, wait_until_ready)
+            return
+        if annotation.format == "U3D" and not dialog.detail_combo.isEnabled():
+            QTimer.singleShot(250, wait_until_ready)
+            return
+        quality_index = quality_indices[quality]
+        if (
+            annotation.format == "U3D"
+            and not result["quality_selected"]
+            and dialog.detail_combo.currentIndex() != quality_index
+        ):
+            result["quality_selected"] = True
+            dialog.detail_combo.setCurrentIndex(quality_index)
             QTimer.singleShot(250, wait_until_ready)
             return
         QTimer.singleShot(1500, capture)

@@ -20,8 +20,9 @@ Project home: <https://github.com/FFeederR10/vf-pdf-helper>
 - Fill AcroForm text, checkbox, radio, combo-box, and list fields
 - Draw handwritten signatures as standard PDF Ink annotations
 - Detect PRC and U3D 3D annotations while preserving their embedded 2D posters
+- Automatically open the first supported embedded 3D object after a PDF is loaded
 - Open PRC and common U3D CLOD mesh models in an interactive 3D window with rotate, pan, zoom, lighting, and wireframe controls
-- Decode large U3D assemblies in the background with progress, cancellation, a bounded triangle preview, and transformed outline proxies for omitted parts
+- Decode large U3D assemblies in the background with progress, cancellation, balanced scene coverage, selectable detail levels, and transformed outline proxies for omitted parts
 - Undo and redo up to 12 editing operations
 - Export through an atomic write and reopen the result for verification
 - Open a PDF from the command line, allowing the app to be set as the Windows default PDF viewer
@@ -74,9 +75,9 @@ Fill Form mode preserves supported AcroForm fields as interactive form objects a
 
 3D PDFs store models in `PRC` or `U3D` annotation streams. VF PDF Helper detects both formats and continues to render the author-provided 2D poster on the normal PDF page.
 
-For PRC or U3D annotations, select **3D** on the toolbar to open the built-in interactive viewer. Left-drag rotates the model, Shift+left-drag or right-drag pans it, and the mouse wheel zooms. The viewer also provides lighting, wireframe, and reset controls.
+The first supported PRC or U3D annotation opens automatically when a PDF is loaded; **3D** on the toolbar reopens it. Left-drag rotates the model, Shift+left-drag or right-drag pans it, and the mouse wheel zooms. The viewer also provides lighting, wireframe, and reset controls.
 
-The U3D decoder supports triangle geometry stored in CLOD base-mesh blocks, including compressed multi-part assemblies and their model-node transforms. To keep very large CAD assemblies responsive and GPU memory bounded, it displays up to 500,000 representative triangles and accurate transformed outline proxies for the remaining parts. The **Outlines** checkbox can hide those proxies when inspecting the detailed mesh subset. Progressive refinement blocks, point-only models, and line-only models are not yet decoded; Adobe Acrobat or Reader remains an optional fallback for those cases.
+The U3D decoder supports triangle geometry stored in CLOD base-mesh blocks, including compressed multi-part assemblies and their model-node transforms. The default **Balanced** preview uses up to 500,000 representative triangles and splits that budget between broad assembly coverage and extra detail on large parts. **High** and **Full** can decode more geometry when memory and loading time allow. Accurate transformed outline proxies preserve the location of omitted parts; **Outlines** hides them for a cleaner solid view. Progressive refinement blocks, point-only models, and line-only models are not yet decoded; Adobe Acrobat or Reader remains an optional fallback for those cases.
 
 Only activate 3D content from documents you trust. VF PDF Helper parses embedded model data locally and applies stream, block, element, nesting, and preview-size limits before rendering.
 

@@ -735,11 +735,69 @@ def _proxy_mesh(
             positions,
             normals,
             np.arange(len(positions), dtype=np.uint32),
-            (0.52, 0.58, 0.67, 0.34),
+            (0.52, 0.58, 0.67, 0.13),
             "lines",
         ),
         instance_count,
     )
+
+
+def _plan_preview_selection(
+    resources: list[tuple[str, int, int]],
+    *,
+    max_triangles: int,
+) -> list[tuple[str, int]]:
+    """Balance broad assembly coverage with detail on the largest meshes.
+
+    ``resources`` contains ``(name, faces_per_instance, instance_count)``.
+    Half of the triangle budget fully decodes as many inexpensive resources as
+    possible; the other half is then spent on the largest remaining geometry.
+    This avoids a preview made almost entirely from a few detailed parts plus
+    thousands of overlapping bounding boxes.
+    """
+
+    usable = [
+        (order, name, int(face_count), int(instance_count))
+        for order, (name, face_count, instance_count) in enumerate(resources)
+        if face_count > 0 and instance_count > 0
+    ]
+    if not usable or max_triangles < 1:
+        return []
+
+    selection: dict[str, int] = {}
+    coverage_budget = max_triangles // 2
+    for _, name, face_count, instance_count in sorted(
+        usable,
+        key=lambda item: (item[2] * item[3], item[0]),
+    ):
+        contribution = face_count * instance_count
+        if contribution <= coverage_budget:
+            selection[name] = face_count
+            coverage_budget -= contribution
+
+    used = sum(
+        selection.get(name, 0) * instance_count
+        for _, name, _, instance_count in usable
+    )
+    detail_budget = max_triangles - used
+    for _, name, face_count, instance_count in sorted(
+        usable,
+        key=lambda item: (item[2] * item[3], -item[0]),
+        reverse=True,
+    ):
+        already_selected = selection.get(name, 0)
+        additional = min(face_count - already_selected, detail_budget // instance_count)
+        if additional > 0:
+            selection[name] = already_selected + additional
+            detail_budget -= additional * instance_count
+        if detail_budget <= 0:
+            break
+
+    return [
+        (name, selection[name])
+        for _, name, _, _ in usable
+        if selection.get(name, 0) > 0
+    ]
 
 
 def decode_u3d_scene(
@@ -814,7 +872,7 @@ def decode_u3d_scene(
     identity = np.eye(4, dtype=np.float64)
     counts: dict[str, tuple[int, int, int, int, int, int]] = {}
     bounds: dict[str, tuple[np.ndarray, np.ndarray]] = {}
-    ranked: list[tuple[int, str]] = []
+    preview_resources: list[tuple[str, int, int]] = []
     source_faces = 0
     instance_count = 0
     for name in paired_names:
@@ -828,23 +886,12 @@ def decode_u3d_scene(
         contribution = base_counts[0] * len(transforms)
         source_faces += contribution
         instance_count += len(transforms)
-        ranked.append((contribution, name))
-    ranked.sort(key=lambda item: item[0], reverse=True)
+        preview_resources.append((name, base_counts[0], len(transforms)))
 
-    selected: list[tuple[str, int]] = []
-    remaining = max_triangles
-    for contribution, name in ranked:
-        if remaining <= 0:
-            break
-        face_count = counts[name][0]
-        occurrence_count = len(occurrences[name])
-        keep_per_instance = min(face_count, remaining // occurrence_count)
-        if keep_per_instance < 1 and remaining >= occurrence_count:
-            keep_per_instance = 1
-        if keep_per_instance < 1:
-            continue
-        selected.append((name, keep_per_instance))
-        remaining -= keep_per_instance * occurrence_count
+    selected = _plan_preview_selection(
+        preview_resources,
+        max_triangles=max_triangles,
+    )
     if not selected:
         raise U3DDecodeError("The U3D preview limit is too small for this model.")
 
