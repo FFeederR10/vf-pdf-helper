@@ -2642,6 +2642,7 @@ class MainWindow(QMainWindow):
             "3D PDFs\n"
             "• The first supported 3D object opens automatically when a PDF is loaded.\n"
             "• PRC and U3D models open in the built-in viewer: drag to rotate, Shift+drag to pan, and use the wheel to zoom.\n"
+            "• Unified steel-blue shading and edge outlines are enabled by default; Appearance and Edges can restore part colors or hide outlines.\n"
             "• Complete U3D geometry loads by default; optional High/Fast modes are explicitly marked incomplete.\n"
             "• Activate interactive 3D content only when you trust the PDF.\n\n"
             "Navigation\n"

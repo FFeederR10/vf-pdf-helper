@@ -119,6 +119,7 @@ GL_TRIANGLES = 0x0004
 GL_TRIANGLE_STRIP = 0x0005
 GL_TRIANGLE_FAN = 0x0006
 GL_LINES = 0x0001
+GL_POLYGON_OFFSET_FILL = 0x8037
 
 U3D_QUALITY_LEVELS = (
     ("Complete", None),
@@ -250,6 +251,7 @@ class PrcCanvas(QOpenGLWidget):
         self._gpu_meshes: list[GpuMesh] = []
         self._gl: QOpenGLFunctions_2_1 | None = None
         self._program: QOpenGLShaderProgram | None = None
+        self._edge_program: QOpenGLShaderProgram | None = None
         self._render_error = ""
         self._scene_center = np.zeros(3, dtype=np.float32)
         self._scene_radius = 1.0
@@ -263,6 +265,8 @@ class PrcCanvas(QOpenGLWidget):
         self._wireframe = False
         self._lighting = True
         self._show_outlines = True
+        self._unified_colors = True
+        self._edge_outlines = True
         self.stats = ModelStats(0, 0, 0, 0)
 
     def load_prc(self, path: str) -> ModelStats:
@@ -380,7 +384,7 @@ class PrcCanvas(QOpenGLWidget):
         if self.isValid() and self._gl is not None:
             try:
                 self.makeCurrent()
-                self._upload_meshes()
+                self._rebuild_color_buffers()
             finally:
                 self.doneCurrent()
         self.reset_view()
@@ -420,6 +424,25 @@ class PrcCanvas(QOpenGLWidget):
         self._show_outlines = enabled
         self.update()
 
+    def set_unified_colors(self, enabled: bool) -> None:
+        if self._unified_colors == enabled:
+            return
+        self._unified_colors = enabled
+        if self.isValid() and self._gl is not None and self._gpu_meshes:
+            try:
+                self.makeCurrent()
+                self._rebuild_color_buffers()
+            except Exception as exc:
+                self._render_error = str(exc)
+                self.render_failed.emit(self._render_error)
+            finally:
+                self.doneCurrent()
+        self.update()
+
+    def set_edge_outlines(self, enabled: bool) -> None:
+        self._edge_outlines = enabled
+        self.update()
+
     def initializeGL(self) -> None:  # type: ignore[override]
         try:
             self._gl = QOpenGLFunctions_2_1()
@@ -452,6 +475,35 @@ class PrcCanvas(QOpenGLWidget):
                 raise ThreeDViewError(f"The 3D fragment shader failed: {self._program.log()}")
             if not self._program.link():
                 raise ThreeDViewError(f"The 3D shader could not be linked: {self._program.log()}")
+            self._edge_program = QOpenGLShaderProgram(self)
+            edge_vertex_shader = """
+                attribute highp vec3 position;
+                uniform highp mat4 mvpMatrix;
+                void main() {
+                    gl_Position = mvpMatrix * vec4(position, 1.0);
+                }
+            """
+            edge_fragment_shader = """
+                void main() {
+                    gl_FragColor = vec4(0.14, 0.20, 0.26, 0.48);
+                }
+            """
+            if not self._edge_program.addShaderFromSourceCode(
+                QOpenGLShader.ShaderTypeBit.Vertex, edge_vertex_shader
+            ):
+                raise ThreeDViewError(
+                    f"The 3D edge vertex shader failed: {self._edge_program.log()}"
+                )
+            if not self._edge_program.addShaderFromSourceCode(
+                QOpenGLShader.ShaderTypeBit.Fragment, edge_fragment_shader
+            ):
+                raise ThreeDViewError(
+                    f"The 3D edge fragment shader failed: {self._edge_program.log()}"
+                )
+            if not self._edge_program.link():
+                raise ThreeDViewError(
+                    f"The 3D edge shader could not be linked: {self._edge_program.log()}"
+                )
             self._gl.glClearColor(0.965, 0.975, 0.992, 1.0)
             self._gl.glEnable(GL_DEPTH_TEST)
             self._gl.glEnable(GL_BLEND)
@@ -482,19 +534,7 @@ class PrcCanvas(QOpenGLWidget):
         self._destroy_gpu_meshes()
         for mesh in self._cpu_meshes:
             positions = np.ascontiguousarray(mesh.positions[mesh.indices], dtype=np.float32)
-            if mesh.normals is None:
-                normals = np.zeros_like(positions, dtype=np.float32)
-                normals[:, 2] = 1.0
-            else:
-                normals = np.ascontiguousarray(mesh.normals[mesh.indices], dtype=np.float32)
-            base_color = np.asarray(mesh.color, dtype=np.float32)
-            colors = np.tile(base_color, (len(positions), 1))
-            if self._lighting:
-                light = np.asarray((0.35, 0.55, 0.75), dtype=np.float32)
-                light /= np.linalg.norm(light)
-                shades = 0.28 + 0.72 * np.abs(normals @ light)
-                colors[:, :3] *= shades[:, np.newaxis]
-            colors = np.ascontiguousarray(colors, dtype=np.float32)
+            colors = self._mesh_colors(mesh)
             vertex_buffer = self._new_buffer(
                 QOpenGLBuffer.Type.VertexBuffer, positions.tobytes()
             )
@@ -510,6 +550,38 @@ class PrcCanvas(QOpenGLWidget):
                     mesh.color,
                 )
             )
+
+    def _mesh_colors(self, mesh: CpuMesh) -> np.ndarray:
+        surface = mesh.mode in {GL_TRIANGLES, GL_TRIANGLE_STRIP, GL_TRIANGLE_FAN}
+        if self._unified_colors and surface:
+            base_color = np.asarray((0.58, 0.69, 0.77, mesh.color[3]), dtype=np.float32)
+        else:
+            base_color = np.asarray(mesh.color, dtype=np.float32)
+        colors = np.tile(base_color, (len(mesh.indices), 1))
+        if self._lighting and surface:
+            if mesh.normals is None:
+                normals = np.zeros((len(mesh.indices), 3), dtype=np.float32)
+                normals[:, 2] = 1.0
+            else:
+                normals = np.ascontiguousarray(mesh.normals[mesh.indices], dtype=np.float32)
+            light = np.asarray((0.35, 0.55, 0.75), dtype=np.float32)
+            light /= np.linalg.norm(light)
+            shades = 0.52 + 0.48 * np.abs(normals @ light)
+            colors[:, :3] *= shades[:, np.newaxis]
+        return np.ascontiguousarray(colors, dtype=np.float32)
+
+    def _rebuild_color_buffers(self) -> None:
+        if len(self._cpu_meshes) != len(self._gpu_meshes):
+            self._upload_meshes()
+            return
+        for cpu_mesh, gpu_mesh in zip(self._cpu_meshes, self._gpu_meshes):
+            colors = self._mesh_colors(cpu_mesh)
+            color_buffer = self._new_buffer(
+                QOpenGLBuffer.Type.VertexBuffer, colors.tobytes()
+            )
+            if gpu_mesh.color_buffer.isCreated():
+                gpu_mesh.color_buffer.destroy()
+            gpu_mesh.color_buffer = color_buffer
 
     def _destroy_gpu_meshes(self) -> None:
         for mesh in self._gpu_meshes:
@@ -551,10 +623,16 @@ class PrcCanvas(QOpenGLWidget):
             -float(self._scene_center[1]),
             -float(self._scene_center[2]),
         )
+        mvp = projection * view * model
         program.bind()
-        program.setUniformValue(program.uniformLocation("mvpMatrix"), projection * view * model)
+        program.setUniformValue(program.uniformLocation("mvpMatrix"), mvp)
         position_location = program.attributeLocation("position")
         color_location = program.attributeLocation("vertexColor")
+        surface_modes = {GL_TRIANGLES, GL_TRIANGLE_STRIP, GL_TRIANGLE_FAN}
+
+        if not self._wireframe and self._edge_outlines:
+            gl.glEnable(GL_POLYGON_OFFSET_FILL)
+            gl.glPolygonOffset(1.0, 1.0)
         for mesh in self._gpu_meshes:
             if mesh.mode == GL_LINES and not self._show_outlines:
                 continue
@@ -571,8 +649,29 @@ class PrcCanvas(QOpenGLWidget):
             program.disableAttributeArray(position_location)
             mesh.color_buffer.release()
             mesh.vertex_buffer.release()
-        gl.glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
         program.release()
+
+        edge_program = self._edge_program
+        if not self._wireframe and self._edge_outlines and edge_program is not None:
+            gl.glDisable(GL_POLYGON_OFFSET_FILL)
+            edge_program.bind()
+            edge_program.setUniformValue(edge_program.uniformLocation("mvpMatrix"), mvp)
+            edge_position_location = edge_program.attributeLocation("position")
+            gl.glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
+            gl.glLineWidth(1.0)
+            for mesh in self._gpu_meshes:
+                if mesh.mode not in surface_modes:
+                    continue
+                mesh.vertex_buffer.bind()
+                edge_program.enableAttributeArray(edge_position_location)
+                edge_program.setAttributeBuffer(
+                    edge_position_location, GL_FLOAT, 0, 3, 12
+                )
+                gl.glDrawArrays(mesh.mode, 0, mesh.vertex_count)
+                edge_program.disableAttributeArray(edge_position_location)
+                mesh.vertex_buffer.release()
+            edge_program.release()
+        gl.glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:  # type: ignore[override]
         self._last_mouse = event.position()
@@ -682,10 +781,13 @@ class ThreeDViewerDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(9)
-        controls = QHBoxLayout()
+        status_layout = QHBoxLayout()
         self.title = QLabel("Preparing 3D model...")
         self.title.setStyleSheet("font-weight:600;color:#172033;")
-        controls.addWidget(self.title)
+        status_layout.addWidget(self.title)
+        status_layout.addStretch(1)
+        layout.addLayout(status_layout)
+        controls = QHBoxLayout()
         controls.addStretch(1)
         detail_label = QLabel("Detail")
         self.detail_combo = QComboBox()
@@ -695,7 +797,20 @@ class ThreeDViewerDialog(QDialog):
             "Complete loads every supported triangle and is the default. "
             "High and Fast are optional incomplete previews."
         )
-        self.outlines_checkbox = QCheckBox("Outlines")
+        appearance_label = QLabel("Appearance")
+        self.appearance_combo = QComboBox()
+        self.appearance_combo.addItems(("Unified", "Part colors"))
+        self.appearance_combo.setToolTip(
+            "Unified uses one steel-blue material. Part colors restore per-part colors."
+        )
+        self.appearance_combo.currentIndexChanged.connect(
+            lambda index: self.canvas.set_unified_colors(index == 0)
+        )
+        self.edges_checkbox = QCheckBox("Edges")
+        self.edges_checkbox.setChecked(True)
+        self.edges_checkbox.setToolTip("Draw dark structural edges over solid surfaces")
+        self.edges_checkbox.toggled.connect(self.canvas.set_edge_outlines)
+        self.outlines_checkbox = QCheckBox("Missing-part boxes")
         self.outlines_checkbox.setChecked(True)
         self.outlines_checkbox.toggled.connect(self.canvas.set_outlines)
         wireframe = QCheckBox("Wireframe")
@@ -711,6 +826,9 @@ class ThreeDViewerDialog(QDialog):
         close.clicked.connect(self.close)
         controls.addWidget(detail_label)
         controls.addWidget(self.detail_combo)
+        controls.addWidget(appearance_label)
+        controls.addWidget(self.appearance_combo)
+        controls.addWidget(self.edges_checkbox)
         controls.addWidget(self.outlines_checkbox)
         controls.addWidget(wireframe)
         controls.addWidget(lighting)

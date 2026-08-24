@@ -21,7 +21,7 @@ Project home: <https://github.com/FFeederR10/vf-pdf-helper>
 - Draw handwritten signatures as standard PDF Ink annotations
 - Detect PRC and U3D 3D annotations while preserving their embedded 2D posters
 - Automatically open the first supported embedded 3D object after a PDF is loaded
-- Open PRC and common U3D CLOD mesh models in an interactive 3D window with rotate, pan, zoom, lighting, and wireframe controls
+- Open PRC and common U3D CLOD mesh models in an interactive 3D window with rotate, pan, zoom, lighting, wireframe, unified-material, and edge-outline controls
 - Decode complete supported U3D triangle geometry in the background by default, with progress, cancellation, and explicitly optional incomplete performance previews
 - Undo and redo up to 12 editing operations
 - Export through an atomic write and reopen the result for verification
@@ -75,7 +75,7 @@ Fill Form mode preserves supported AcroForm fields as interactive form objects a
 
 3D PDFs store models in `PRC` or `U3D` annotation streams. VF PDF Helper detects both formats and continues to render the author-provided 2D poster on the normal PDF page.
 
-The first supported PRC or U3D annotation opens automatically when a PDF is loaded; **3D** on the toolbar reopens it. Left-drag rotates the model, Shift+left-drag or right-drag pans it, and the mouse wheel zooms. The viewer also provides lighting, wireframe, and reset controls.
+The first supported PRC or U3D annotation opens automatically when a PDF is loaded; **3D** on the toolbar reopens it. Left-drag rotates the model, Shift+left-drag or right-drag pans it, and the mouse wheel zooms. The viewer defaults to a consistent steel-blue material with structural edge outlines so large assemblies remain readable. **Appearance** can restore the PDF's per-part colors, while **Edges**, lighting, wireframe, and reset controls can be adjusted independently.
 
 The U3D decoder supports triangle geometry stored in CLOD base-mesh blocks, including compressed multi-part assemblies and their model-node transforms. **Complete** is the default and loads every supported triangle, even when this takes substantially longer. **High (incomplete)** and **Fast (incomplete)** are opt-in previews for users who explicitly prefer performance; transformed outline proxies show the location of parts omitted only in those modes. Complete mode refuses to display a model rather than silently truncate it when the file uses unsupported progressive refinement or exceeds the 10,000,000 expanded-face complete-render safety limit. Point-only and line-only models are also not yet decoded; Adobe Acrobat or Reader remains an optional fallback for those cases.
 
