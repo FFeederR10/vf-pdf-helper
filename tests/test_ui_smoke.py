@@ -16,6 +16,22 @@ from PySide6.QtWidgets import QApplication, QCheckBox, QLineEdit
 from pdf_helper.ui import MainWindow, configure_application
 
 
+def make_3d_pdf(path: Path, model_format: str = "PRC") -> None:
+    doc = pymupdf.open()
+    page = doc.new_page(width=300, height=200)
+    stream_xref = doc.get_new_xref()
+    doc.update_object(stream_xref, f"<< /Type /3D /Subtype /{model_format} >>")
+    doc.update_stream(stream_xref, b"synthetic-3d-stream")
+    annotation_xref = doc.get_new_xref()
+    doc.update_object(
+        annotation_xref,
+        f"<< /Type /Annot /Subtype /3D /Rect [30 30 270 170] /3DD {stream_xref} 0 R >>",
+    )
+    doc.xref_set_key(page.xref, "Annots", f"[{annotation_xref} 0 R]")
+    doc.save(path)
+    doc.close()
+
+
 def test_window_opens_pdf(tmp_path: Path) -> None:
     path = tmp_path / "smoke.pdf"
     doc = pymupdf.open()
@@ -34,6 +50,20 @@ def test_window_opens_pdf(tmp_path: Path) -> None:
     assert window.viewer.isVisible() is False  # top-level window itself is not shown in the test
     assert window.text_status.text().strip().endswith("text blocks")
     assert window.viewer.canvas.pixmap() is not None
+    window.model.close()
+
+
+def test_window_detects_3d_pdf_and_enables_view_action(tmp_path: Path) -> None:
+    path = tmp_path / "three-d.pdf"
+    make_3d_pdf(path)
+    app = QApplication.instance() or QApplication([])
+    configure_application(app)
+    window = MainWindow()
+    window.open_path(str(path))
+    app.processEvents()
+
+    assert window.three_d_action.isEnabled()
+    assert "1 3D model(s) (PRC)" in window.text_status.text()
     window.model.close()
 
 

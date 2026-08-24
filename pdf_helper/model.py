@@ -59,6 +59,15 @@ class FormField:
     on_value: str | None = None
 
 
+@dataclass(frozen=True)
+class ThreeDAnnotation:
+    page_index: int
+    xref: int
+    stream_xref: int
+    format: str
+    rect: tuple[float, float, float, float]
+
+
 BUILTIN_FONTS: tuple[FontChoice, ...] = (
     FontChoice("Helvetica", "helv"),
     FontChoice("Helvetica Bold", "hebo"),
@@ -285,6 +294,57 @@ class PdfDocumentModel:
         scale = min(1.0, max_width / max(page.rect.width, 1))
         pix = page.get_pixmap(matrix=pymupdf.Matrix(scale, scale), alpha=False, annots=True)
         return pix.samples, pix.width, pix.height, pix.stride
+
+    def three_d_annotations(self, page_index: int) -> list[ThreeDAnnotation]:
+        """Return embedded PRC/U3D annotations on a page without activating them."""
+        doc = self._require_doc()
+        page = doc.load_page(page_index)
+        models: list[ThreeDAnnotation] = []
+        for annot in page.annots() or ():
+            if annot.type[0] != pymupdf.PDF_ANNOT_3D:
+                continue
+            key_type, key_value = doc.xref_get_key(annot.xref, "3DD")
+            if key_type != "xref":
+                continue
+            try:
+                stream_xref = int(key_value.split()[0])
+            except (TypeError, ValueError, IndexError):
+                continue
+            subtype_type, subtype_value = doc.xref_get_key(stream_xref, "Subtype")
+            model_format = (
+                subtype_value.removeprefix("/").upper()
+                if subtype_type == "name" and subtype_value
+                else "UNKNOWN"
+            )
+            models.append(
+                ThreeDAnnotation(
+                    page_index=page_index,
+                    xref=annot.xref,
+                    stream_xref=stream_xref,
+                    format=model_format,
+                    rect=tuple(float(value) for value in annot.rect),
+                )
+            )
+        return models
+
+    def three_d_stream(self, annotation: ThreeDAnnotation) -> bytes:
+        """Extract a bounded, decoded PRC/U3D stream for an interactive viewer."""
+        doc = self._require_doc()
+        if annotation.stream_xref < 1 or not doc.xref_is_stream(annotation.stream_xref):
+            raise PdfError("The selected 3D annotation has no readable model stream.")
+        try:
+            data = doc.xref_stream(annotation.stream_xref)
+        except Exception as exc:
+            raise PdfError(f"Could not extract the embedded 3D model: {exc}") from exc
+        if not data:
+            raise PdfError("The embedded 3D model stream is empty.")
+        if len(data) > 512 * 1024 * 1024:
+            raise PdfError("The embedded 3D model is larger than the 512 MB safety limit.")
+        return data
+
+    def snapshot_bytes(self) -> bytes:
+        """Return the current document state for handing off to an external viewer."""
+        return self._bytes()
 
     def text_spans(self, page_index: int) -> list[TextSpan]:
         page = self._require_doc().load_page(page_index)

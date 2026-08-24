@@ -2,7 +2,7 @@
 
 ![VF PDF Helper icon](assets/vf-pdf-helper.png)
 
-VF PDF Helper is a free and open-source Windows application for viewing PDFs, organizing pages, filling forms, adding handwritten signatures, and editing real PDF text layers.
+VF PDF Helper is a free and open-source Windows application for viewing PDFs and embedded PRC 3D models, organizing pages, filling forms, adding handwritten signatures, and editing real PDF text layers.
 
 Project home: <https://github.com/FFeederR10/vf-pdf-helper>
 
@@ -19,6 +19,9 @@ Project home: <https://github.com/FFeederR10/vf-pdf-helper>
 - Change font, size, color, bold, italic, and underline from a floating toolbar
 - Fill AcroForm text, checkbox, radio, combo-box, and list fields
 - Draw handwritten signatures as standard PDF Ink annotations
+- Detect PRC and U3D 3D annotations while preserving their embedded 2D posters
+- Open PRC models in an interactive 3D window with rotate, pan, zoom, lighting, and wireframe controls
+- Hand U3D models off to an installed Adobe Acrobat or Reader for interactive viewing
 - Undo and redo up to 12 editing operations
 - Export through an atomic write and reopen the result for verification
 - Open a PDF from the command line, allowing the app to be set as the Windows default PDF viewer
@@ -26,6 +29,7 @@ Project home: <https://github.com/FFeederR10/vf-pdf-helper>
 ## Requirements
 
 - 64-bit Windows 10 or Windows 11
+- An OpenGL 2.1-compatible graphics driver for the built-in PRC viewer
 - Python 3.12 when running or building from source
 
 ## Run from Source
@@ -66,6 +70,14 @@ VF PDF Helper does not redistribute Windows font files. Before embedding an inst
 
 Fill Form mode preserves supported AcroForm fields as interactive form objects after export. Signature Pen mode creates PDF Ink annotations rather than flattening the entire page into an image.
 
+## 3D PDF Support
+
+3D PDFs store models in `PRC` or `U3D` annotation streams. VF PDF Helper detects both formats and continues to render the author-provided 2D poster on the normal PDF page.
+
+For PRC annotations, select **3D** on the toolbar to open the built-in interactive viewer. Left-drag rotates the model, Shift+left-drag or right-drag pans it, and the mouse wheel zooms. The viewer also provides lighting, wireframe, and reset controls.
+
+The built-in open-source viewer does not decode U3D. If Adobe Acrobat or Reader is installed, VF PDF Helper can open a temporary snapshot there for interactive U3D viewing. Adobe disables PDF 3D content by default because active content can present security risks; enable it only for documents you trust.
+
 ## License
 
 VF PDF Helper is released under the [GNU Affero General Public License v3](LICENSE). You may use, study, modify, and redistribute it, provided you comply with the AGPL v3 source-disclosure and redistribution requirements.
@@ -79,4 +91,3 @@ PDF files are processed locally. The application does not upload documents and c
 ## Contributing and Security
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) before submitting changes. Report security issues according to [SECURITY.md](SECURITY.md).
-

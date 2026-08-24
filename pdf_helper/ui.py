@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import tempfile
 from pathlib import Path
 
 import pymupdf
@@ -66,7 +67,14 @@ from .model import (
     PdfDocumentModel,
     PdfError,
     TextSpan,
+    ThreeDAnnotation,
     available_fonts,
+)
+from .three_d import (
+    ThreeDViewError,
+    ThreeDViewerDialog,
+    find_adobe_executable,
+    launch_adobe,
 )
 
 
@@ -1634,6 +1642,9 @@ class MainWindow(QMainWindow):
         self.current_span: TextSpan | None = None
         self.fonts = available_fonts()
         self._initial_path = initial_path
+        self._three_d_dialog: ThreeDViewerDialog | None = None
+        self._external_temp_dir: tempfile.TemporaryDirectory[str] | None = None
+        self._external_snapshot_count = 0
 
         self.setWindowTitle(APP_NAME)
         self.resize(1320, 840)
@@ -1796,6 +1807,12 @@ class MainWindow(QMainWindow):
         self.fit_action = self._make_action(
             "Fit", self._fit_to_width, "Ctrl+0", tooltip="Fit page width"
         )
+        self.three_d_action = self._make_action(
+            "3D",
+            self._open_three_d_view,
+            "Ctrl+3",
+            tooltip="Open the interactive 3D model on this page",
+        )
 
         self.mode_group = QActionGroup(self)
         self.mode_group.setExclusive(True)
@@ -1854,6 +1871,8 @@ class MainWindow(QMainWindow):
         view_menu.addAction(self.form_mode_action)
         view_menu.addAction(self.signature_mode_action)
         view_menu.addSeparator()
+        view_menu.addAction(self.three_d_action)
+        view_menu.addSeparator()
         view_menu.addAction(self.zoom_in_action)
         view_menu.addAction(self.zoom_out_action)
         view_menu.addAction(self.fit_action)
@@ -1880,6 +1899,7 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self.redo_action)
         toolbar.addSeparator()
         toolbar.addAction(self.browse_mode_action)
+        toolbar.addAction(self.three_d_action)
         toolbar.addAction(self.select_mode_action)
         toolbar.addAction(self.add_mode_action)
         toolbar.addAction(self.form_mode_action)
@@ -2183,6 +2203,114 @@ class MainWindow(QMainWindow):
         self.zoom = max(0.25, min(4.0, self.zoom * factor))
         self._render_current_page()
 
+    def _choose_three_d_annotation(self) -> ThreeDAnnotation | None:
+        models = self.model.three_d_annotations(self.current_page)
+        if not models:
+            return None
+        if len(models) == 1:
+            return models[0]
+        labels = [f"Model {index + 1} - {model.format}" for index, model in enumerate(models)]
+        choice, accepted = QInputDialog.getItem(
+            self,
+            "Select 3D Model",
+            "This page contains multiple 3D models:",
+            labels,
+            0,
+            False,
+        )
+        if not accepted:
+            return None
+        return models[labels.index(choice)]
+
+    def _open_three_d_view(self) -> None:
+        if not self.model.is_open:
+            return
+        try:
+            annotation = self._choose_three_d_annotation()
+        except PdfError as exc:
+            self._error(str(exc))
+            return
+        if annotation is None:
+            return
+        if annotation.format != "PRC":
+            answer = QMessageBox.question(
+                self,
+                "External 3D Viewer",
+                f"This model uses {annotation.format}. VF PDF Helper can display its embedded 2D poster, but the "
+                "open-source interactive viewer currently supports PRC models.\n\n"
+                "Open the current PDF in Adobe Acrobat or Reader for interactive viewing?\n\n"
+                "Only activate 3D content when you trust the document.",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+            if answer == QMessageBox.StandardButton.Yes:
+                self._open_current_in_adobe()
+            return
+        try:
+            model_data = self.model.three_d_stream(annotation)
+            self._close_three_d_dialog()
+            dialog = ThreeDViewerDialog(model_data, self.current_page + 1, self)
+            dialog.open_external_requested.connect(self._open_current_in_adobe)
+            dialog.destroyed.connect(self._three_d_dialog_closed)
+            self._three_d_dialog = dialog
+            dialog.show()
+            dialog.raise_()
+            dialog.activateWindow()
+            self.statusBar().showMessage("Interactive PRC model opened", 2500)
+        except (PdfError, ThreeDViewError, OSError) as exc:
+            answer = QMessageBox.question(
+                self,
+                "3D Viewer",
+                f"The embedded model could not be opened in the built-in viewer:\n{exc}\n\n"
+                "Open the PDF in Adobe Acrobat or Reader instead?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes,
+            )
+            if answer == QMessageBox.StandardButton.Yes:
+                self._open_current_in_adobe()
+
+    def _three_d_dialog_closed(self) -> None:
+        self._three_d_dialog = None
+
+    def _close_three_d_dialog(self) -> None:
+        dialog = self._three_d_dialog
+        self._three_d_dialog = None
+        if dialog is None:
+            return
+        try:
+            dialog.destroyed.disconnect(self._three_d_dialog_closed)
+        except (RuntimeError, TypeError):
+            pass
+        dialog.close()
+
+    def _open_current_in_adobe(self) -> None:
+        executable = find_adobe_executable()
+        if executable is None:
+            self._error(
+                "Adobe Acrobat or Reader was not found. Install it to interact with U3D models "
+                "or with PRC models that the built-in viewer cannot decode."
+            )
+            return
+        try:
+            if self._external_temp_dir is None:
+                self._external_temp_dir = tempfile.TemporaryDirectory(
+                    prefix="vf-pdf-helper-acrobat-"
+                )
+            self._external_snapshot_count += 1
+            snapshot = (
+                Path(self._external_temp_dir.name)
+                / f"document-{self._external_snapshot_count}.pdf"
+            )
+            snapshot.write_bytes(self.model.snapshot_bytes())
+            if not launch_adobe(executable, snapshot):
+                raise OSError("Adobe Acrobat or Reader did not start.")
+            self.statusBar().showMessage(
+                "Opened a temporary snapshot in Adobe. Activate 3D content only if you trust the PDF.",
+                5000,
+            )
+        except (OSError, PdfError) as exc:
+            self._error(f"Could not open the PDF in Adobe Acrobat or Reader: {exc}")
+
     def _rebuild_document(self) -> None:
         self.current_span = None
         self.current_page = max(0, min(self.current_page, self.model.page_count - 1))
@@ -2205,6 +2333,7 @@ class MainWindow(QMainWindow):
             image = qimage_from_render(data, width, height, stride)
             spans = self.model.text_spans(self.current_page)
             form_fields = self.model.form_fields(self.current_page)
+            three_d_models = self.model.three_d_annotations(self.current_page)
         except Exception as exc:
             self._error(f"Page rendering failed: {exc}")
             return
@@ -2214,6 +2343,9 @@ class MainWindow(QMainWindow):
         status_parts = [f"{len(spans)} text blocks" if spans else "No text layer"]
         if form_fields:
             status_parts.append(f"{len(form_fields)} form fields")
+        if three_d_models:
+            formats = "/".join(dict.fromkeys(model.format for model in three_d_models))
+            status_parts.append(f"{len(three_d_models)} 3D model(s) ({formats})")
         self.text_status.setText(" | ".join(status_parts) + "  ")
         self.page_status.setText(f"Page {self.current_page + 1} of {self.model.page_count}  ")
         self.zoom_status.setText(f"{round(self.zoom * 100)}%  ")
@@ -2445,6 +2577,13 @@ class MainWindow(QMainWindow):
         ):
             action.setEnabled(opened)
         self.form_mode_action.setEnabled(opened and self.model.form_field_count > 0)
+        three_d_models = self.model.three_d_annotations(self.current_page) if opened else []
+        self.three_d_action.setEnabled(bool(three_d_models))
+        self.three_d_action.setToolTip(
+            "Open the interactive 3D model on this page"
+            if three_d_models
+            else "This page has no embedded 3D model"
+        )
         self.delete_page_action.setEnabled(opened and self.model.page_count > selected_count)
         self.undo_action.setEnabled(self.model.can_undo)
         self.redo_action.setEnabled(self.model.can_redo)
@@ -2483,6 +2622,11 @@ class MainWindow(QMainWindow):
             "• Text, checkbox, radio, combo, and list fields remain interactive after export.\n"
             "• Select Signature Pen and drag to draw; adjust color and width in the top-right toolbar.\n"
             "• Each stroke can be undone with Ctrl+Z.\n\n"
+            "3D PDFs\n"
+            "• When a page contains a 3D annotation, select 3D on the toolbar.\n"
+            "• PRC models open in the built-in viewer: drag to rotate, Shift+drag to pan, and use the wheel to zoom.\n"
+            "• U3D models retain their 2D poster and can be handed off to an installed Adobe Acrobat or Reader.\n"
+            "• Activate interactive 3D content only when you trust the PDF.\n\n"
             "Navigation\n"
             "• Use Ctrl + mouse wheel to zoom and PageUp/PageDown to change pages.",
         )
@@ -2492,9 +2636,9 @@ class MainWindow(QMainWindow):
             self,
             f"About {APP_NAME}",
             f"<b>{APP_NAME} {APP_VERSION}</b><br>"
-            "A lightweight PDF viewer, page organizer, form filler, signature tool, and text-layer editor.<br><br>"
+            "A lightweight PDF and PRC 3D viewer, page organizer, form filler, signature tool, and text-layer editor.<br><br>"
             "Free and open-source under GNU AGPL v3.<br>"
-            "PDF engine: PyMuPDF | Interface: Qt for Python<br><br>"
+            "PDF engine: PyMuPDF | 3D engine: nanoPRC | Interface: Qt for Python<br><br>"
             f'Source code: <a href="{PROJECT_URL}">{PROJECT_URL}</a>',
         )
 
@@ -2503,7 +2647,7 @@ class MainWindow(QMainWindow):
             self,
             "Open-source Licenses",
             f"{APP_NAME} is released under GNU AGPL v3.\n\n"
-            "PyMuPDF/MuPDF is used under AGPL v3; Qt for Python/PySide6 is used under its GPL v3 "
+            "PyMuPDF/MuPDF and nanoPRC are used under AGPL v3; Qt for Python/PySide6 is used under its GPL v3 "
             "open-source license option. For other third-party components and complete license texts, see "
             "THIRD_PARTY_NOTICES.md and the licenses directory in the project root.\n\n"
             f"Complete source code: {PROJECT_URL}",
@@ -2535,6 +2679,13 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self._confirm_discard_changes():
+            self._close_three_d_dialog()
+            if self._external_temp_dir is not None:
+                try:
+                    self._external_temp_dir.cleanup()
+                except OSError:
+                    pass
+                self._external_temp_dir = None
             self.model.close()
             event.accept()
         else:

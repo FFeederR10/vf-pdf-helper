@@ -24,6 +24,24 @@ PyMuPDF and MuPDF are also available separately under a commercial license from 
 
 PySide6 is offered under LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only (and a separate commercial license). Because VF PDF Helper is AGPL v3 software, this project selects the GPL-3.0-only option for the combined open-source application. Qt may include additional permissively licensed third-party components; an official binary release must preserve the notices for the exact files it distributes.
 
+### nanoPRC / nanoprc-py 0.1.2
+
+- Purpose: parsing embedded PRC model streams and exposing their tessellated geometry to the built-in 3D viewer
+- License: GNU Affero General Public License v3 or later
+- Copyright: 2023-2026 CascadiaVoxel LLC and contributors
+- Source: <https://github.com/mvrhel/nanoPRC>
+- License: the repository root [LICENSE](LICENSE)
+
+### NumPy 2.4.2
+
+- Purpose: geometry arrays, bounds, normals and lighting calculations for the built-in 3D viewer
+- License: BSD-3-Clause, with additional notices for software bundled in the official NumPy wheel
+- Copyright: 2005-2025 NumPy Developers
+- Source: <https://github.com/numpy/numpy>
+- License text: copied from the installed NumPy distribution to `licenses/NumPy-LICENSE.txt` by `build.ps1`
+
+The NumPy wheel may include OpenBLAS and other permissively licensed components. The complete license file from the exact installed wheel must remain beside any distributed Windows binary.
+
 ### Pillow 11.3.0
 
 - Purpose: image support pulled into the packaged runtime and generation of the project-owned PNG/ICO application icon

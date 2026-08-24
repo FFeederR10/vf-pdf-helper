@@ -60,6 +60,25 @@ def make_form_pdf(path: Path) -> None:
     doc.close()
 
 
+def make_3d_annotation_pdf(path: Path, model_format: str = "PRC") -> bytes:
+    model_data = b"synthetic-3d-model-stream"
+    doc = pymupdf.open()
+    page = doc.new_page(width=420, height=300)
+    stream_xref = doc.get_new_xref()
+    doc.update_object(stream_xref, f"<< /Type /3D /Subtype /{model_format} >>")
+    doc.update_stream(stream_xref, model_data)
+    annotation_xref = doc.get_new_xref()
+    doc.update_object(
+        annotation_xref,
+        f"<< /Type /Annot /Subtype /3D /Rect [40 60 380 240] "
+        f"/3DD {stream_xref} 0 R /Contents (3D Model) >>",
+    )
+    doc.xref_set_key(page.xref, "Annots", f"[{annotation_xref} 0 R]")
+    doc.save(path)
+    doc.close()
+    return model_data
+
+
 def page_texts(model: PdfDocumentModel) -> list[str]:
     assert model.doc is not None
     return [model.doc.load_page(i).get_text() for i in range(model.page_count)]
@@ -173,6 +192,21 @@ def test_render_and_text_metadata(tmp_path: Path) -> None:
     spans = model.text_spans(0)
     assert any(span.text == "RENDER" for span in spans)
     assert all(len(span.color) == 3 for span in spans)
+
+
+def test_detects_and_extracts_embedded_3d_model(tmp_path: Path) -> None:
+    source = tmp_path / "three-d.pdf"
+    expected = make_3d_annotation_pdf(source)
+    model = PdfDocumentModel()
+    model.open_file(str(source))
+
+    annotations = model.three_d_annotations(0)
+    assert len(annotations) == 1
+    assert annotations[0].page_index == 0
+    assert annotations[0].format == "PRC"
+    assert annotations[0].rect == pytest.approx((40, 60, 380, 240))
+    assert model.three_d_stream(annotations[0]) == expected
+    assert model.snapshot_bytes().startswith(b"%PDF-")
 
 
 def test_chinese_text_uses_system_font_fallback(tmp_path: Path) -> None:
