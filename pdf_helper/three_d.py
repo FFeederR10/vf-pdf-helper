@@ -3,13 +3,14 @@ from __future__ import annotations
 import math
 import os
 import tempfile
+import threading
 import winreg
 from dataclasses import dataclass
 from pathlib import Path
 
 import nanoprc_py
 import numpy as np
-from PySide6.QtCore import QPointF, QProcess, Qt, Signal
+from PySide6.QtCore import QObject, QPointF, QProcess, QThread, Qt, Signal, Slot
 from PySide6.QtGui import (
     QCloseEvent,
     QMatrix4x4,
@@ -29,10 +30,13 @@ from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
     QLabel,
+    QProgressBar,
     QPushButton,
     QVBoxLayout,
     QWidget,
 )
+
+from .u3d import U3DDecodeCancelled, U3DScene, decode_u3d_scene
 
 
 class ThreeDViewError(RuntimeError):
@@ -91,6 +95,9 @@ def launch_adobe(executable: Path, pdf_path: Path) -> bool:
 GL_COLOR_BUFFER_BIT = 0x00004000
 GL_DEPTH_BUFFER_BIT = 0x00000100
 GL_DEPTH_TEST = 0x0B71
+GL_BLEND = 0x0BE2
+GL_SRC_ALPHA = 0x0302
+GL_ONE_MINUS_SRC_ALPHA = 0x0303
 GL_MULTISAMPLE = 0x809D
 GL_LIGHTING = 0x0B50
 GL_LIGHT0 = 0x4000
@@ -215,7 +222,7 @@ def _material_color(material: dict) -> tuple[float, float, float, float]:
 
 
 class PrcCanvas(QOpenGLWidget):
-    """A compact OpenGL PRC viewer embedded in the Qt application."""
+    """A compact OpenGL canvas for PRC and decoded U3D triangle meshes."""
 
     render_failed = Signal(str)
 
@@ -248,6 +255,7 @@ class PrcCanvas(QOpenGLWidget):
         self._drag_mode = ""
         self._wireframe = False
         self._lighting = True
+        self._show_outlines = True
         self.stats = ModelStats(0, 0, 0, 0)
 
     def load_prc(self, path: str) -> ModelStats:
@@ -331,6 +339,40 @@ class PrcCanvas(QOpenGLWidget):
         self.reset_view()
         return self.stats
 
+    def load_u3d(self, scene: U3DScene) -> ModelStats:
+        meshes = [
+            CpuMesh(
+                mesh.positions,
+                mesh.normals,
+                mesh.indices,
+                GL_LINES if mesh.primitive == "lines" else GL_TRIANGLES,
+                mesh.color,
+            )
+            for mesh in scene.meshes
+            if len(mesh.positions) and len(mesh.indices)
+        ]
+        if not meshes:
+            raise ThreeDViewError("The decoded U3D preview contains no renderable geometry.")
+        bounds_min = np.array([np.inf, np.inf, np.inf], dtype=np.float64)
+        bounds_max = np.array([-np.inf, -np.inf, -np.inf], dtype=np.float64)
+        for mesh in meshes:
+            bounds_min = np.minimum(bounds_min, mesh.positions.min(axis=0))
+            bounds_max = np.maximum(bounds_max, mesh.positions.max(axis=0))
+        if not np.all(np.isfinite(bounds_min)) or not np.all(np.isfinite(bounds_max)):
+            raise ThreeDViewError("The decoded U3D preview has invalid geometry bounds.")
+        self._context = None
+        self._document = None
+        self._cpu_meshes = meshes
+        self._set_bounds(bounds_min, bounds_max)
+        self.stats = ModelStats(
+            tessellations=scene.resource_count,
+            faces=scene.rendered_faces,
+            primitives=len(meshes),
+            vertices=sum(len(mesh.positions) for mesh in meshes),
+        )
+        self.reset_view()
+        return self.stats
+
     def _set_bounds(self, minimum: np.ndarray, maximum: np.ndarray) -> None:
         self._scene_center = ((minimum + maximum) * 0.5).astype(np.float32)
         radius = float(np.linalg.norm(maximum - minimum) * 0.5)
@@ -359,6 +401,10 @@ class PrcCanvas(QOpenGLWidget):
                 self.render_failed.emit(self._render_error)
             finally:
                 self.doneCurrent()
+        self.update()
+
+    def set_outlines(self, enabled: bool) -> None:
+        self._show_outlines = enabled
         self.update()
 
     def initializeGL(self) -> None:  # type: ignore[override]
@@ -395,6 +441,8 @@ class PrcCanvas(QOpenGLWidget):
                 raise ThreeDViewError(f"The 3D shader could not be linked: {self._program.log()}")
             self._gl.glClearColor(0.965, 0.975, 0.992, 1.0)
             self._gl.glEnable(GL_DEPTH_TEST)
+            self._gl.glEnable(GL_BLEND)
+            self._gl.glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
             self._gl.glEnable(GL_MULTISAMPLE)
             self._upload_meshes()
             context = self.context()
@@ -495,6 +543,8 @@ class PrcCanvas(QOpenGLWidget):
         position_location = program.attributeLocation("position")
         color_location = program.attributeLocation("vertexColor")
         for mesh in self._gpu_meshes:
+            if mesh.mode == GL_LINES and not self._show_outlines:
+                continue
             mesh.vertex_buffer.bind()
             program.enableAttributeArray(position_location)
             program.setAttributeBuffer(position_location, GL_FLOAT, 0, 3, 12)
@@ -557,6 +607,36 @@ class PrcCanvas(QOpenGLWidget):
         event.accept()
 
 
+class _U3DDecoderWorker(QObject):
+    progress = Signal(int, str)
+    decoded = Signal(object)
+    failed = Signal(str)
+    cancelled = Signal()
+
+    def __init__(self, model_data: bytes, stop_event: threading.Event) -> None:
+        super().__init__()
+        self._model_data = model_data
+        self._stop_event = stop_event
+
+    @Slot()
+    def run(self) -> None:
+        try:
+            scene = decode_u3d_scene(
+                self._model_data,
+                max_triangles=500_000,
+                progress=self.progress.emit,
+                cancelled=self._stop_event.is_set,
+            )
+        except U3DDecodeCancelled:
+            self.cancelled.emit()
+        except Exception as exc:
+            self.failed.emit(str(exc))
+        else:
+            self.decoded.emit(scene)
+        finally:
+            self._model_data = b""
+
+
 class ThreeDViewerDialog(QDialog):
     open_external_requested = Signal()
 
@@ -564,30 +644,32 @@ class ThreeDViewerDialog(QDialog):
         self,
         model_data: bytes,
         page_number: int,
+        model_format: str = "PRC",
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowTitle(f"Interactive 3D View - Page {page_number}")
         self.resize(980, 720)
-        self._temp_dir = tempfile.TemporaryDirectory(prefix="vf-pdf-helper-3d-")
-        model_path = Path(self._temp_dir.name) / "embedded-model.prc"
-        model_path.write_bytes(model_data)
-
+        self._temp_dir: tempfile.TemporaryDirectory[str] | None = None
+        self._decode_thread: QThread | None = None
+        self._decode_worker: _U3DDecoderWorker | None = None
+        self._decode_stop = threading.Event()
+        self._close_after_decode = False
+        self._model_format = model_format.upper()
         self.canvas = PrcCanvas(self)
-        stats = self.canvas.load_prc(str(model_path))
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(9)
         controls = QHBoxLayout()
-        title = QLabel(
-            f"PRC model | {stats.tessellations} tessellation(s) | "
-            f"{stats.faces} faces | {stats.vertices:,} vertices"
-        )
-        title.setStyleSheet("font-weight:600;color:#172033;")
-        controls.addWidget(title)
+        self.title = QLabel("Preparing 3D model...")
+        self.title.setStyleSheet("font-weight:600;color:#172033;")
+        controls.addWidget(self.title)
         controls.addStretch(1)
+        outlines = QCheckBox("Outlines")
+        outlines.setChecked(True)
+        outlines.toggled.connect(self.canvas.set_outlines)
         wireframe = QCheckBox("Wireframe")
         wireframe.toggled.connect(self.canvas.set_wireframe)
         lighting = QCheckBox("Lighting")
@@ -599,6 +681,7 @@ class ThreeDViewerDialog(QDialog):
         external.clicked.connect(self.open_external_requested)
         close = QPushButton("Close")
         close.clicked.connect(self.close)
+        controls.addWidget(outlines)
         controls.addWidget(wireframe)
         controls.addWidget(lighting)
         controls.addWidget(reset)
@@ -606,17 +689,130 @@ class ThreeDViewerDialog(QDialog):
         controls.addWidget(close)
         layout.addLayout(controls)
         layout.addWidget(self.canvas, 1)
-        instructions = QLabel(
+        self.loading_panel = QWidget(self)
+        loading_layout = QVBoxLayout(self.loading_panel)
+        loading_layout.addStretch(1)
+        self.loading_label = QLabel("Inspecting embedded U3D model...")
+        self.loading_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.loading_label.setStyleSheet("font-size:15px;font-weight:600;color:#36445d;")
+        self.loading_progress = QProgressBar()
+        self.loading_progress.setRange(0, 100)
+        self.loading_progress.setValue(0)
+        self.loading_progress.setMaximumWidth(560)
+        loading_layout.addWidget(self.loading_label)
+        loading_layout.addWidget(
+            self.loading_progress, 0, Qt.AlignmentFlag.AlignHCenter
+        )
+        loading_layout.addStretch(1)
+        layout.addWidget(self.loading_panel, 1)
+        self.instructions = QLabel(
             "Left-drag: rotate   |   Shift+left-drag or right-drag: pan   |   "
             "Wheel: zoom   |   Double-click: reset"
         )
-        instructions.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        instructions.setStyleSheet("color:#657084;")
+        self.instructions.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.instructions.setStyleSheet("color:#657084;")
         self.canvas.render_failed.connect(
-            lambda message: instructions.setText(f"3D rendering failed: {message}")
+            lambda message: self.instructions.setText(f"3D rendering failed: {message}")
         )
-        layout.addWidget(instructions)
+        layout.addWidget(self.instructions)
+
+        if self._model_format == "PRC":
+            outlines.hide()
+            self.loading_panel.hide()
+            self._temp_dir = tempfile.TemporaryDirectory(prefix="vf-pdf-helper-3d-")
+            model_path = Path(self._temp_dir.name) / "embedded-model.prc"
+            model_path.write_bytes(model_data)
+            stats = self.canvas.load_prc(str(model_path))
+            self.title.setText(
+                f"PRC model | {stats.tessellations} tessellation(s) | "
+                f"{stats.faces:,} faces | {stats.vertices:,} vertices"
+            )
+        elif self._model_format == "U3D":
+            self.canvas.hide()
+            self.instructions.setText(
+                "Large U3D assemblies are decoded as a bounded interactive preview."
+            )
+            self._start_u3d_decode(model_data)
+        else:
+            raise ThreeDViewError(f"The built-in viewer does not support {self._model_format} models.")
+
+    def _start_u3d_decode(self, model_data: bytes) -> None:
+        thread = QThread(self)
+        worker = _U3DDecoderWorker(model_data, self._decode_stop)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.progress.connect(self._u3d_progress)
+        worker.decoded.connect(self._u3d_decoded)
+        worker.failed.connect(self._u3d_failed)
+        worker.cancelled.connect(self._u3d_cancelled)
+        worker.decoded.connect(thread.quit)
+        worker.failed.connect(thread.quit)
+        worker.cancelled.connect(thread.quit)
+        thread.finished.connect(worker.deleteLater)
+        thread.finished.connect(self._u3d_thread_finished)
+        self._decode_thread = thread
+        self._decode_worker = worker
+        thread.start()
+
+    @Slot(int, str)
+    def _u3d_progress(self, percent: int, message: str) -> None:
+        self.loading_progress.setValue(max(0, min(100, percent)))
+        self.loading_label.setText(message)
+
+    @Slot(object)
+    def _u3d_decoded(self, scene: U3DScene) -> None:
+        try:
+            self.canvas.load_u3d(scene)
+        except Exception as exc:
+            self._u3d_failed(str(exc))
+            return
+        self.loading_panel.hide()
+        self.canvas.show()
+        preview_note = ""
+        if scene.omitted_faces:
+            preview_note = f" | preview {scene.rendered_faces:,}/{scene.source_faces:,} faces"
+        self.title.setText(
+            f"U3D model | {scene.resource_count:,} resources | "
+            f"{scene.instance_count:,} instances{preview_note}"
+            + (
+                f" | {scene.proxy_instances:,} outline proxies"
+                if scene.proxy_instances
+                else ""
+            )
+        )
+        self.instructions.setText(
+            "Left-drag: rotate   |   Shift+left-drag or right-drag: pan   |   "
+            "Wheel: zoom   |   Double-click: reset"
+        )
+
+    @Slot(str)
+    def _u3d_failed(self, message: str) -> None:
+        self.loading_progress.setValue(0)
+        self.loading_label.setText(f"The U3D preview could not be prepared:\n{message}")
+        self.title.setText("U3D model could not be decoded")
+
+    @Slot()
+    def _u3d_cancelled(self) -> None:
+        self.loading_label.setText("U3D decoding cancelled")
+
+    @Slot()
+    def _u3d_thread_finished(self) -> None:
+        thread = self._decode_thread
+        self._decode_thread = None
+        self._decode_worker = None
+        if thread is not None:
+            thread.deleteLater()
+        if self._close_after_decode:
+            self.close()
 
     def closeEvent(self, event: QCloseEvent) -> None:  # type: ignore[override]
-        self._temp_dir.cleanup()
+        if self._decode_thread is not None and self._decode_thread.isRunning():
+            self._decode_stop.set()
+            self._close_after_decode = True
+            self.loading_label.setText("Cancelling U3D decoding...")
+            event.ignore()
+            return
+        if self._temp_dir is not None:
+            self._temp_dir.cleanup()
+            self._temp_dir = None
         super().closeEvent(event)

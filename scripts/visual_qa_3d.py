@@ -29,12 +29,12 @@ def main(argv: list[str] | None = None) -> int:
         item
         for page_index in range(model.page_count)
         for item in model.three_d_annotations(page_index)
-        if item.format == "PRC"
+        if item.format in {"PRC", "U3D"}
     )
     app = QApplication.instance() or QApplication([])
     configure_application(app)
     dialog = ThreeDViewerDialog(
-        model.three_d_stream(annotation), annotation.page_index + 1
+        model.three_d_stream(annotation), annotation.page_index + 1, annotation.format
     )
     dialog.show()
 
@@ -51,7 +51,13 @@ def main(argv: list[str] | None = None) -> int:
         model.close()
         app.quit()
 
-    QTimer.singleShot(2500, capture)
+    def wait_until_ready() -> None:
+        if annotation.format == "U3D" and dialog.loading_panel.isVisible():
+            QTimer.singleShot(250, wait_until_ready)
+            return
+        QTimer.singleShot(1500, capture)
+
+    QTimer.singleShot(250, wait_until_ready)
     app.exec()
     if not result["ok"]:
         raise RuntimeError("Could not save the 3D viewer framebuffer.")

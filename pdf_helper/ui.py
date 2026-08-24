@@ -2232,12 +2232,12 @@ class MainWindow(QMainWindow):
             return
         if annotation is None:
             return
-        if annotation.format != "PRC":
+        if annotation.format not in {"PRC", "U3D"}:
             answer = QMessageBox.question(
                 self,
                 "External 3D Viewer",
                 f"This model uses {annotation.format}. VF PDF Helper can display its embedded 2D poster, but the "
-                "open-source interactive viewer currently supports PRC models.\n\n"
+                "open-source interactive viewer currently supports PRC and U3D models.\n\n"
                 "Open the current PDF in Adobe Acrobat or Reader for interactive viewing?\n\n"
                 "Only activate 3D content when you trust the document.",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
@@ -2249,14 +2249,21 @@ class MainWindow(QMainWindow):
         try:
             model_data = self.model.three_d_stream(annotation)
             self._close_three_d_dialog()
-            dialog = ThreeDViewerDialog(model_data, self.current_page + 1, self)
+            dialog = ThreeDViewerDialog(
+                model_data,
+                self.current_page + 1,
+                annotation.format,
+                self,
+            )
             dialog.open_external_requested.connect(self._open_current_in_adobe)
             dialog.destroyed.connect(self._three_d_dialog_closed)
             self._three_d_dialog = dialog
             dialog.show()
             dialog.raise_()
             dialog.activateWindow()
-            self.statusBar().showMessage("Interactive PRC model opened", 2500)
+            self.statusBar().showMessage(
+                f"Interactive {annotation.format} model opened", 2500
+            )
         except (PdfError, ThreeDViewError, OSError) as exc:
             answer = QMessageBox.question(
                 self,
@@ -2287,8 +2294,8 @@ class MainWindow(QMainWindow):
         executable = find_adobe_executable()
         if executable is None:
             self._error(
-                "Adobe Acrobat or Reader was not found. Install it to interact with U3D models "
-                "or with PRC models that the built-in viewer cannot decode."
+                "Adobe Acrobat or Reader was not found. The built-in viewer supports PRC and U3D; "
+                "Adobe is only needed as an optional fallback for models it cannot decode."
             )
             return
         try:

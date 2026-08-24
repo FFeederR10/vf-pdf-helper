@@ -42,6 +42,16 @@ PySide6 is offered under LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only (and a se
 
 The NumPy wheel may include OpenBLAS and other permissively licensed components. The complete license file from the exact installed wheel must remain beside any distributed Windows binary.
 
+### Intel Universal 3D Sample Software (adapted portions)
+
+- Purpose: ECMA-363 arithmetic decoding and CLOD base-mesh field ordering used by the built-in U3D preview decoder
+- License: Apache License 2.0
+- Copyright: 1999-2006 Intel Corporation
+- Source: <https://github.com/ningfei/u3d>
+- License text: [licenses/Apache-2.0.txt](licenses/Apache-2.0.txt)
+
+VF PDF Helper contains a Python adaptation of the relevant decoding behavior rather than redistributing the Intel runtime or viewer. The adaptation retains Intel's copyright and Apache-2.0 attribution in `pdf_helper/u3d.py`.
+
 ### Pillow 11.3.0
 
 - Purpose: image support pulled into the packaged runtime and generation of the project-owned PNG/ICO application icon

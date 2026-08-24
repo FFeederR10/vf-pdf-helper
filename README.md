@@ -2,7 +2,7 @@
 
 ![VF PDF Helper icon](assets/vf-pdf-helper.png)
 
-VF PDF Helper is a free and open-source Windows application for viewing PDFs and embedded PRC 3D models, organizing pages, filling forms, adding handwritten signatures, and editing real PDF text layers.
+VF PDF Helper is a free and open-source Windows application for viewing PDFs and embedded PRC/U3D 3D models, organizing pages, filling forms, adding handwritten signatures, and editing real PDF text layers.
 
 Project home: <https://github.com/FFeederR10/vf-pdf-helper>
 
@@ -20,8 +20,8 @@ Project home: <https://github.com/FFeederR10/vf-pdf-helper>
 - Fill AcroForm text, checkbox, radio, combo-box, and list fields
 - Draw handwritten signatures as standard PDF Ink annotations
 - Detect PRC and U3D 3D annotations while preserving their embedded 2D posters
-- Open PRC models in an interactive 3D window with rotate, pan, zoom, lighting, and wireframe controls
-- Hand U3D models off to an installed Adobe Acrobat or Reader for interactive viewing
+- Open PRC and common U3D CLOD mesh models in an interactive 3D window with rotate, pan, zoom, lighting, and wireframe controls
+- Decode large U3D assemblies in the background with progress, cancellation, a bounded triangle preview, and transformed outline proxies for omitted parts
 - Undo and redo up to 12 editing operations
 - Export through an atomic write and reopen the result for verification
 - Open a PDF from the command line, allowing the app to be set as the Windows default PDF viewer
@@ -29,7 +29,7 @@ Project home: <https://github.com/FFeederR10/vf-pdf-helper>
 ## Requirements
 
 - 64-bit Windows 10 or Windows 11
-- An OpenGL 2.1-compatible graphics driver for the built-in PRC viewer
+- An OpenGL 2.1-compatible graphics driver for the built-in 3D viewer
 - Python 3.12 when running or building from source
 
 ## Run from Source
@@ -74,9 +74,11 @@ Fill Form mode preserves supported AcroForm fields as interactive form objects a
 
 3D PDFs store models in `PRC` or `U3D` annotation streams. VF PDF Helper detects both formats and continues to render the author-provided 2D poster on the normal PDF page.
 
-For PRC annotations, select **3D** on the toolbar to open the built-in interactive viewer. Left-drag rotates the model, Shift+left-drag or right-drag pans it, and the mouse wheel zooms. The viewer also provides lighting, wireframe, and reset controls.
+For PRC or U3D annotations, select **3D** on the toolbar to open the built-in interactive viewer. Left-drag rotates the model, Shift+left-drag or right-drag pans it, and the mouse wheel zooms. The viewer also provides lighting, wireframe, and reset controls.
 
-The built-in open-source viewer does not decode U3D. If Adobe Acrobat or Reader is installed, VF PDF Helper can open a temporary snapshot there for interactive U3D viewing. Adobe disables PDF 3D content by default because active content can present security risks; enable it only for documents you trust.
+The U3D decoder supports triangle geometry stored in CLOD base-mesh blocks, including compressed multi-part assemblies and their model-node transforms. To keep very large CAD assemblies responsive and GPU memory bounded, it displays up to 500,000 representative triangles and accurate transformed outline proxies for the remaining parts. The **Outlines** checkbox can hide those proxies when inspecting the detailed mesh subset. Progressive refinement blocks, point-only models, and line-only models are not yet decoded; Adobe Acrobat or Reader remains an optional fallback for those cases.
+
+Only activate 3D content from documents you trust. VF PDF Helper parses embedded model data locally and applies stream, block, element, nesting, and preview-size limits before rendering.
 
 ## License
 
